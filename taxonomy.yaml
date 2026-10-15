@@ -1,0 +1,39 @@
+# Taxonomia editável. O código lê este arquivo a cada execução.
+# - natureza: natureza padrão quando a categoria é escolhida.
+# - necessidade: padrão (fixo|variavel); o dicionário pode sobrescrever.
+# - llm: se a IA pode sugerir esta categoria (receitas e transferências nunca vêm da IA).
+# Essencial/Supérfluo NÃO tem padrão aqui: vem só do dicionário (decisão sua).
+# PF x PJ: o titular vem da conta (pluggy.items[].owner), não da categoria. As categorias "PJ" abaixo
+# são só as da empresa (MEI); Retirada/Aporte são Transferência entre as suas contas PF e PJ.
+
+naturezas: [Receita, Despesa, Transferência, Investimento]
+
+categorias:
+  Salário CLT:    {natureza: Receita,       necessidade: fixo,     llm: false}
+  PJ:             {natureza: Receita,       necessidade: variavel, llm: false}
+  Faturamento PJ: {natureza: Receita,       necessidade: variavel, llm: false}
+  Investimento:   {natureza: Investimento,  necessidade: variavel, llm: false}
+  Transferência:  {natureza: Transferência, necessidade: variavel, llm: false}
+  Retirada PJ→PF: {natureza: Transferência, necessidade: variavel, llm: false}
+  Aporte PF→PJ:   {natureza: Transferência, necessidade: variavel, llm: false}
+  Moradia:        {natureza: Despesa,       necessidade: fixo,     llm: true}
+  Alimentação:    {natureza: Despesa,       necessidade: variavel, llm: true}
+  Transporte:     {natureza: Despesa,       necessidade: variavel, llm: true}
+  Saúde:          {natureza: Despesa,       necessidade: variavel, llm: true}
+  Estudo/Cert:    {natureza: Despesa,       necessidade: variavel, llm: true}
+  Lazer:          {natureza: Despesa,       necessidade: variavel, llm: true}
+  Assinaturas:    {natureza: Despesa,       necessidade: fixo,     llm: true}
+  Compras:        {natureza: Despesa,       necessidade: variavel, llm: true}
+  Impostos/Taxas: {natureza: Despesa,       necessidade: variavel, llm: true}
+  Impostos/DAS:   {natureza: Despesa,       necessidade: fixo,     llm: false}
+  Taxas bancárias PJ: {natureza: Despesa,   necessidade: variavel, llm: false}
+  Hobby:           {natureza: Despesa,       necessidade: variavel, llm: true}
+  Jurídico:       {natureza: Despesa,       necessidade: fixo,     llm: false}
+  Família:        {natureza: Despesa,       necessidade: variavel, llm: false}
+  Cuidados pessoais: {natureza: Despesa,    necessidade: variavel, llm: true}
+  Outros:         {natureza: Despesa,       necessidade: variavel, llm: true}
+  Revisar:        {natureza: Despesa,       necessidade: variavel, llm: true}
+
+necessidades: [fixo, variavel]
+essencial: [Essencial, Supérfluo]
+fontes: [Cliente PJ, Empresa CLT, Pessoal]

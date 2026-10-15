@@ -1,0 +1,50 @@
+{
+  "next": null,
+  "results": [
+    {
+      "id": "f0000000-0000-4000-8000-000000000030",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "TRANSFERENCIA RECEBIDA PELO PIX",
+      "descriptionRaw": "TRANSFERENCIA RECEBIDA PELO PIX",
+      "currencyCode": "BRL",
+      "amount": 1500.0,
+      "date": "2026-10-07T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000002",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "CREDIT",
+      "operationType": "PIX",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190",
+          "branchNumber": "0001",
+          "accountNumber": "12345-6"
+        },
+        "receiver": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "260",
+          "routingNumberISPB": "18236120"
+        },
+        "paymentMethod": "PIX"
+      },
+      "merchant": null,
+      "providerId": "OF-000030",
+      "order": 0
+    }
+  ]
+}

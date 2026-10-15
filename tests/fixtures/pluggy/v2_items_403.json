@@ -1,0 +1,5 @@
+{
+  "message": "This client is not enabled to list its items.",
+  "code": 403,
+  "codeDescription": "LIST_ITEMS_FEATURE_NOT_ENABLED"
+}

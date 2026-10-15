@@ -1,0 +1,24 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "connector": {
+    "id": 200,
+    "name": "MeuPluggy",
+    "credentials": [],
+    "oauth": true
+  },
+  "status": "UPDATED",
+  "executionStatus": "SUCCESS",
+  "error": null,
+  "createdAt": "2026-10-01T12:00:00.000Z",
+  "updatedAt": "2026-10-15T06:05:00.000Z",
+  "lastUpdatedAt": "2026-10-15T06:05:00.000Z",
+  "statusDetail": null,
+  "nextAutoSyncAt": null,
+  "consentExpiresAt": null,
+  "products": [
+    "ACCOUNTS",
+    "CREDIT_CARDS",
+    "TRANSACTIONS",
+    "PAYMENT_DATA"
+  ]
+}

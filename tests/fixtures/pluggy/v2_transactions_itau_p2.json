@@ -1,0 +1,96 @@
+{
+  "results": [
+    {
+      "id": "f0000000-0000-4000-8000-000000000006",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "TARIFA PACOTE SERVICOS",
+      "descriptionRaw": "TARIFA PACOTE SERVICOS",
+      "currencyCode": "BRL",
+      "amount": -19.9,
+      "date": "2026-10-10T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "DEBIT",
+      "operationType": "PACOTE_TARIFA_SERVICOS",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": null,
+      "merchant": null,
+      "providerId": "OF-000006",
+      "order": 0
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000007",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "PIX ENVIADO TITULAR TESTE",
+      "descriptionRaw": "PIX ENVIADO TITULAR TESTE",
+      "currencyCode": "BRL",
+      "amount": -700.0,
+      "date": "2026-10-10T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "DEBIT",
+      "operationType": "PIX",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190"
+        },
+        "receiver": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "033",
+          "routingNumberISPB": "90400888",
+          "branchNumber": "0002",
+          "accountNumber": "99887-1"
+        },
+        "paymentMethod": "PIX"
+      },
+      "merchant": null,
+      "providerId": "OF-000007",
+      "order": 1
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000008",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "REND PAGO APLIC AUT",
+      "descriptionRaw": "REND PAGO APLIC AUT",
+      "currencyCode": "BRL",
+      "amount": 3.12,
+      "date": "2026-10-14T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "CREDIT",
+      "operationType": "RENDIMENTO_APLIC_FINANCEIRA",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": null,
+      "merchant": null,
+      "providerId": "OF-000008",
+      "order": 0
+    }
+  ],
+  "next": null
+}

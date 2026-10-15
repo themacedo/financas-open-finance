@@ -1,0 +1,9 @@
+{
+  "code": 429,
+  "message": "Too many requests. Please try again later (see Retry-After header in seconds)",
+  "_headers": {
+    "RateLimit-Limit": "360",
+    "RateLimit-Reset": "45",
+    "Retry-After": "60"
+  }
+}

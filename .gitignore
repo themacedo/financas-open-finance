@@ -1,0 +1,46 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+
+# Config real e dados (ficam no cofre, nunca no projeto)
+config.yaml
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+data/
+demo-out/
+*.sparsebundle/
+*.dmg
+
+# Credenciais: nunca no projeto (use fin setup -> Keychain)
+.env
+.env.*
+*.pem
+*.p12
+*service-account*.json
+*credentials*.json
+client_secret*.json
+fin-pessoal-*.json
+
+# Extratos / prints / exports reais
+*.csv
+*.ofx
+*.pdf
+*.xlsx
+*.png
+*.jpg
+*.jpeg
+*.heic
+extratos/
+caju.yaml
+
+# JSON solto na raiz (provável chave baixada); fixtures sintéticas ficam em tests/fixtures
+/*.json
+
+# macOS
+.DS_Store

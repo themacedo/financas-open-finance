@@ -1,0 +1,55 @@
+{
+  "page": 1,
+  "total": 2,
+  "totalPages": 1,
+  "results": [
+    {
+      "id": "b0000000-0000-4000-8000-000000000009",
+      "dueDate": "2026-09-10T00:00:00.000Z",
+      "billClosingDate": "2026-09-03T00:00:00.000Z",
+      "totalAmount": 1980.15,
+      "totalAmountCurrencyCode": "BRL",
+      "minimumPaymentAmount": 297.02,
+      "allowsInstallments": true,
+      "financeCharges": [
+        {
+          "id": "fc000000-0000-4000-8000-000000000001",
+          "type": "IOF",
+          "amount": 0.38,
+          "currencyCode": "BRL",
+          "additionalInfo": "NA"
+        }
+      ],
+      "payments": [
+        {
+          "id": "pa000000-0000-4000-8000-000000000001",
+          "valueType": "FULL_PAYMENT",
+          "paymentDate": "2026-08-09T00:00:00.000Z",
+          "paymentMode": "BANK_SLIP",
+          "amount": 1702.33,
+          "currencyCode": "BRL"
+        }
+      ]
+    },
+    {
+      "id": "b0000000-0000-4000-8000-000000000010",
+      "dueDate": "2026-10-10T00:00:00.000Z",
+      "billClosingDate": "2026-10-03T00:00:00.000Z",
+      "totalAmount": 2350.4,
+      "totalAmountCurrencyCode": "BRL",
+      "minimumPaymentAmount": 352.56,
+      "allowsInstallments": true,
+      "financeCharges": [],
+      "payments": [
+        {
+          "id": "pa000000-0000-4000-8000-000000000002",
+          "valueType": "FULL_PAYMENT",
+          "paymentDate": "2026-09-09T00:00:00.000Z",
+          "paymentMode": "BANK_SLIP",
+          "amount": 1980.15,
+          "currencyCode": "BRL"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+# Copie para config.yaml (que fica fora do git) e preencha.
+# Nenhum segredo aqui: segredos ficam no Keychain (fin setup ...).
+
+# Onde ficam o ledger SQLite, a auditoria do LLM e o CSV do Caju.
+# Aponte para dentro do cofre criptografado (scripts/criar-cofre.sh).
+data_dir: /Volumes/FinVault/fin
+# Se definido, nada roda sem este volume montado (evita gravar dado fora do cofre).
+require_mount: /Volumes/FinVault
+
+pluggy:
+  # itemIds copiados do dashboard da Pluggy (Demo > Connected Items), 1 por banco.
+  # owner: pf (padrão) ou pj. A conta da sua empresa (MEI) é pj: os números dela saem separados
+  # e Pix entre PF e PJ vira "Retirada PJ→PF" / "Aporte PF→PJ" (Transferência).
+  items:
+    - {bank: itau, item_id: "COLE-O-ITEM-ID-DO-ITAU"}
+    - {bank: nubank, item_id: "COLE-O-ITEM-ID-DO-NUBANK"}
+    - {bank: santander, item_id: "COLE-O-ITEM-ID-DO-SANTANDER"}
+    - {bank: nubank_pj, item_id: "COLE-O-ITEM-ID-DO-NUBANK-EMPRESAS", owner: pj}
+  window_days: 45            # janela de releitura diária
+  missing_syncs_to_remove: 3 # syncs ausente até virar removed_upstream (fica no ledger, sai dos números)
+  stale_hours: 48            # alerta se o item não atualiza há mais que isso
+
+# Cartões: CNPJ do emissor (só dígitos, pegue de um pagamento real) e dias de fechamento/vencimento.
+# Usados quando a Pluggy não manda billForecastDate.
+cards:
+  nubank: {issuer_cnpj: "", closing_day: 3, due_day: 10}
+
+# Contas próprias FORA da Pluggy (ex.: uma corretora). Pix/TED para elas = Transferência.
+# compe = código do banco; account = número da conta com dígito (só números).
+extra_own_accounts: []
+#  - {compe: "077", account: "123456"}
+
+sheets:
+  spreadsheet_id: ""         # o id em docs.google.com/spreadsheets/d/<id>/edit
+
+income:
+  salary_day: 5              # dia em que o salário costuma cair (corte do /posso_comprar)
+  expected_monthly: 0        # renda mensal esperada; 0 = média dos últimos 3 meses
+  # CNPJ pagador (só dígitos) -> fonte e categoria. Preencha com os CNPJs reais.
+  # Cliente da PJ: use "Faturamento PJ". Se cair numa conta owner: pj com categoria PJ, vira Faturamento PJ.
+  sources: []
+#   - {cnpj: "00000000000000", fonte: Empresa CLT, categoria: Salário CLT}
+#   - {cnpj: "00000000000000", fonte: Cliente PJ, categoria: Faturamento PJ}
+
+# Custos fixos do mês. "padrao" casa com a descrição normalizada (maiúsculas, sem acento).
+fixed_costs: []
+#  - {nome: Aluguel, valor: 1500.00, dia: 10, padrao: "ALUGUEL"}
+#  - {nome: Internet, valor: 120.00, dia: 15, padrao: "VIVO"}
+
+caju:
+  file: caju.csv             # relativo ao data_dir
+
+privacy:
+  # Termos que bloqueiam o envio ao LLM. Cada palavra bloqueia sozinha (acento não importa).
+  # Ponha nome, cada sobrenome, apelidos e nomes de família separados, por exemplo:
+  #   block_terms: ["nome", "sobrenome1", "sobrenome2", "apelido"]
+  block_terms: []
+
+llm:
+  enabled: true
+  chunk_size: 40
+  min_confidence: 0.6        # abaixo disso a sugestão vira "Revisar"
+  workspace_id: ""          # console > Espaços de trabalho; só para chave criada fora de um workspace
+
+telegram:
+  enabled: true

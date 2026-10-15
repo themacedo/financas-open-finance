@@ -1,0 +1,59 @@
+{
+  "page": 1,
+  "total": 2,
+  "totalPages": 1,
+  "results": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "createdAt": "2026-10-01T12:00:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "type": "BANK",
+      "subtype": "CHECKING_ACCOUNT",
+      "number": "0001/7654321-0",
+      "name": "Conta",
+      "marketingName": null,
+      "balance": 1650.0,
+      "itemId": "10000000-0000-4000-8000-000000000002",
+      "taxNumber": "111.111.111-11",
+      "owner": "TITULAR TESTE",
+      "currencyCode": "BRL",
+      "bankData": {
+        "transferNumber": "260/0001/7654321-0",
+        "closingBalance": 1650.0,
+        "automaticallyInvestedBalance": null,
+        "overdraftContractedLimit": 0,
+        "overdraftUsedLimit": 0,
+        "unarrangedOverdraftAmount": 0
+      }
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "createdAt": "2026-10-01T12:00:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "type": "CREDIT",
+      "subtype": "CREDIT_CARD",
+      "number": "1234",
+      "name": "Cartao Exemplo",
+      "marketingName": "CARTAO EXEMPLO MASTERCARD",
+      "balance": 3180.4,
+      "itemId": "10000000-0000-4000-8000-000000000002",
+      "taxNumber": "***.***.111-11",
+      "owner": "TITULAR TESTE",
+      "currencyCode": "BRL",
+      "creditData": {
+        "level": "PLATINUM",
+        "brand": "MASTERCARD",
+        "brandAdditionalInfo": null,
+        "balanceCloseDate": "2026-11-03",
+        "balanceDueDate": "2026-11-10",
+        "availableCreditLimit": 6819.6,
+        "creditLimit": 10000,
+        "isLimitFlexible": false,
+        "balanceForeignCurrency": 0,
+        "minimumPayment": null,
+        "status": "ACTIVE",
+        "holderType": "MAIN"
+      }
+    }
+  ]
+}

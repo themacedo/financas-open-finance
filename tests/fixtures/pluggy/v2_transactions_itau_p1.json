@@ -1,0 +1,229 @@
+{
+  "results": [
+    {
+      "id": "f0000000-0000-4000-8000-000000000001",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "SALARIO EMPRESA CLT EXEMPLO",
+      "descriptionRaw": "SALARIO EMPRESA CLT EXEMPLO",
+      "currencyCode": "BRL",
+      "amount": 8500.0,
+      "date": "2026-10-05T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "CREDIT",
+      "operationType": "FOLHA_PAGAMENTO",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "EMPRESA CLT EXEMPLO LTDA",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          },
+          "routingNumber": "001",
+          "routingNumberISPB": "00000000"
+        },
+        "receiver": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190",
+          "branchNumber": "0001",
+          "accountNumber": "12345-6"
+        },
+        "paymentMethod": "TED"
+      },
+      "merchant": null,
+      "providerId": "OF-000001",
+      "order": 0
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000002",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "PIX RECEBIDO CLIENTE PJ EXEMPLO",
+      "descriptionRaw": "PIX RECEBIDO CLIENTE PJ EXEMPLO",
+      "currencyCode": "BRL",
+      "amount": 6000.0,
+      "date": "2026-10-06T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "CREDIT",
+      "operationType": "PIX",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "CLIENTE PJ EXEMPLO LTDA",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "22.222.222/0001-22"
+          },
+          "routingNumber": "237",
+          "routingNumberISPB": "60746948"
+        },
+        "receiver": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190",
+          "branchNumber": "0001",
+          "accountNumber": "12345-6"
+        },
+        "paymentMethod": "PIX",
+        "referenceNumber": "E000000002026100600000000001"
+      },
+      "merchant": null,
+      "providerId": "OF-000002",
+      "order": 0
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000003",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "PIX ENVIADO TITULAR TESTE",
+      "descriptionRaw": "PIX ENVIADO TITULAR TESTE",
+      "currencyCode": "BRL",
+      "amount": -1500.0,
+      "date": "2026-10-07T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "DEBIT",
+      "operationType": "PIX",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190",
+          "branchNumber": "0001",
+          "accountNumber": "12345-6"
+        },
+        "receiver": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "260",
+          "routingNumberISPB": "18236120",
+          "branchNumber": "0001",
+          "accountNumber": "7654321-0"
+        },
+        "paymentMethod": "PIX"
+      },
+      "merchant": null,
+      "providerId": "OF-000003",
+      "order": 0
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000004",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "PAGTO FATURA CARTAO EXEMPLO",
+      "descriptionRaw": "PAGTO FATURA CARTAO EXEMPLO",
+      "currencyCode": "BRL",
+      "amount": -2350.4,
+      "date": "2026-10-08T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "DEBIT",
+      "operationType": "BOLETO",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190"
+        },
+        "receiver": {
+          "name": "EMISSOR CARTAO EXEMPLO S.A.",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "33.333.333/0001-33"
+          },
+          "routingNumber": "999",
+          "routingNumberISPB": "99999999"
+        },
+        "paymentMethod": "BOLETO"
+      },
+      "merchant": null,
+      "providerId": "OF-000004",
+      "order": 0
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000005",
+      "createdAt": "2026-10-15T09:12:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "description": "PIX ENVIADO PESSOA EXEMPLO",
+      "descriptionRaw": "PIX ENVIADO PESSOA EXEMPLO",
+      "currencyCode": "BRL",
+      "amount": -80.0,
+      "date": "2026-10-09T00:00:00.000Z",
+      "balance": null,
+      "category": null,
+      "categoryId": null,
+      "accountId": "a0000000-0000-4000-8000-000000000001",
+      "providerCode": null,
+      "status": "POSTED",
+      "type": "DEBIT",
+      "operationType": "PIX",
+      "operationTypeAdditionalInfo": null,
+      "paymentData": {
+        "payer": {
+          "name": "TITULAR TESTE",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "111.111.111-11"
+          },
+          "routingNumber": "341",
+          "routingNumberISPB": "60701190"
+        },
+        "receiver": {
+          "name": "PESSOA EXEMPLO DA SILVA",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "444.444.444-44"
+          },
+          "routingNumber": "104",
+          "routingNumberISPB": "00360305"
+        },
+        "paymentMethod": "PIX"
+      },
+      "merchant": null,
+      "providerId": "OF-000005",
+      "order": 0
+    }
+  ],
+  "next": "?accountId=a0000000-0000-4000-8000-000000000001&after=RkFLRUNVUlNPUjE="
+}

@@ -1,0 +1,30 @@
+{
+  "page": 1,
+  "total": 1,
+  "totalPages": 1,
+  "results": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "createdAt": "2026-10-01T12:00:00.000Z",
+      "updatedAt": "2026-10-15T09:12:00.000Z",
+      "type": "BANK",
+      "subtype": "CHECKING_ACCOUNT",
+      "number": "0001/12345-6",
+      "name": "Conta Corrente",
+      "marketingName": null,
+      "balance": 4210.55,
+      "itemId": "10000000-0000-4000-8000-000000000001",
+      "taxNumber": "111.111.111-11",
+      "owner": "TITULAR TESTE",
+      "currencyCode": "BRL",
+      "bankData": {
+        "transferNumber": "341/0001/12345-6",
+        "closingBalance": 4210.55,
+        "automaticallyInvestedBalance": null,
+        "overdraftContractedLimit": 0,
+        "overdraftUsedLimit": 0,
+        "unarrangedOverdraftAmount": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "10000000-0000-4000-8000-000000000003",
+  "connector": {
+    "id": 200,
+    "name": "MeuPluggy",
+    "credentials": [],
+    "oauth": true
+  },
+  "status": "LOGIN_ERROR",
+  "executionStatus": "USER_AUTHORIZATION_REVOKED",
+  "error": {
+    "code": "USER_AUTHORIZATION_REVOKED",
+    "message": "The user removed the consent"
+  },
+  "createdAt": "2026-10-01T12:00:00.000Z",
+  "updatedAt": "2026-10-15T06:05:00.000Z",
+  "lastUpdatedAt": "2026-10-15T06:05:00.000Z",
+  "statusDetail": null,
+  "nextAutoSyncAt": null,
+  "consentExpiresAt": null,
+  "products": [
+    "ACCOUNTS",
+    "CREDIT_CARDS",
+    "TRANSACTIONS",
+    "PAYMENT_DATA"
+  ]
+}

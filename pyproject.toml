@@ -1,0 +1,46 @@
+[project]
+name = "fin"
+version = "0.1.0"
+description = "Controle financeiro pessoal: Open Finance (Pluggy) -> ledger SQLite -> Sheets/Telegram"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=1.14,<2",
+    "google-auth>=2.30",
+    "gspread>=6.2,<7",
+    "httpx>=0.28",
+    "keyring>=25.7",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+fin = "fin.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 150
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "BLE", "I", "UP", "RUF100"]
+ignore = ["E731"]  # small local lambdas are fine here
+
+[tool.ruff.lint.per-file-ignores]
+"src/fin/sync.py" = ["B023"]
+"tests/conftest.py" = ["E741"]  # I = Itaú account id, used everywhere in the tests  # find_orphan(lambda ...) runs the lambda immediately, inside the same iteration
+
+[tool.ruff.lint.isort]
+known-first-party = ["fin"]
+order-by-type = false

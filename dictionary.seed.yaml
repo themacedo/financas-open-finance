@@ -1,0 +1,50 @@
+# Dicionário inicial (genérico, sem dado pessoal). Carregado no ledger por `fin setup dictionary`
+# e pelo demo. Suas aprovações viram entradas "approved" e têm prioridade sobre estas.
+# kind: contains (padrão dentro da descrição normalizada) | exact | regex | cnpj (só dígitos)
+# Essencial/Supérfluo fica em branco de propósito: é decisão sua (aprove e o dicionário aprende).
+- {pattern: "UBER EATS", categoria: Alimentação}
+- {pattern: "IFOOD", categoria: Alimentação}
+- {pattern: "RAPPI", categoria: Alimentação}
+- {pattern: "SUPERMERCADO", categoria: Alimentação}
+- {pattern: "ATACADAO", categoria: Alimentação}
+- {pattern: "ASSAI", categoria: Alimentação}
+- {pattern: "GUANABARA", categoria: Alimentação}
+- {pattern: "MERCADO LIVRE", categoria: Compras}
+- {pattern: "MERCADOLIVRE", categoria: Compras}
+- {pattern: "AMAZON PRIME", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "AMAZON", categoria: Compras}
+- {pattern: "SHOPEE", categoria: Compras}
+- {pattern: "ALIEXPRESS", categoria: Compras}
+- {pattern: "UBER", categoria: Transporte}
+- {pattern: "POSTO", categoria: Transporte}
+- {pattern: "IPIRANGA", categoria: Transporte}
+- {pattern: "SEM PARAR", categoria: Transporte}
+- {pattern: "NETFLIX", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "SPOTIFY", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "YOUTUBE", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "DISNEY", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "ANTHROPIC", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "CLAUDE AI", categoria: Assinaturas, necessidade: fixo}
+- {pattern: "DROGARIA", categoria: Saúde}
+- {pattern: "DROGASIL", categoria: Saúde}
+- {pattern: "FARMACIA", categoria: Saúde}
+- {pattern: "PACHECO", categoria: Saúde}
+- {pattern: "ENERGIA", categoria: Moradia, necessidade: fixo}
+- {pattern: "LIGHT", categoria: Moradia, necessidade: fixo}
+- {pattern: "ENEL", categoria: Moradia, necessidade: fixo}
+- {pattern: "CEDAE", categoria: Moradia, necessidade: fixo}
+- {pattern: "AGUAS DO RIO", categoria: Moradia, necessidade: fixo}
+- {pattern: "NATURGY", categoria: Moradia, necessidade: fixo}
+- {pattern: "VIVO", categoria: Moradia, necessidade: fixo}
+- {pattern: "CLARO", categoria: Moradia, necessidade: fixo}
+- {pattern: "UDEMY", categoria: Estudo/Cert}
+- {pattern: "ALURA", categoria: Estudo/Cert}
+- {pattern: "TRAILHEAD", categoria: Estudo/Cert}
+- {pattern: "WEBASSESSOR", categoria: Estudo/Cert}
+- {pattern: "IOF", categoria: Impostos/Taxas}
+- {pattern: "ANUIDADE", categoria: Impostos/Taxas}
+# MEI: guia do Simples (DAS). "DAS" sozinho é palavra comum ("das"): só no começo da descrição.
+- {pattern: "SIMEI", categoria: Impostos/DAS, necessidade: fixo}
+- {pattern: "PGMEI", categoria: Impostos/DAS, necessidade: fixo}
+- {pattern: "SIMPLES NACIONAL", categoria: Impostos/DAS, necessidade: fixo}
+- {kind: regex, pattern: "^(PAGAMENTO |PAGTO |PGTO |PAG )?(GUIA )?DAS( |$)", categoria: Impostos/DAS, necessidade: fixo}

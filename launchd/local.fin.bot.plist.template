@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Modelo. scripts/instalar-launchd.sh troca __PROJECT__, __UV__, __HOME__ e grava em ~/Library/LaunchAgents. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.fin.bot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__UV__</string><string>run</string>
+    <string>--project</string><string>__PROJECT__</string>
+    <string>--frozen</string><string>--no-dev</string>
+    <string>fin</string><string>bot</string>
+  </array>
+  <key>WorkingDirectory</key><string>__PROJECT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+    <key>FIN_CONFIG</key><string>__PROJECT__/config.yaml</string>
+    <key>FIN_LOG_FILE</key><string>__HOME__/Library/Logs/fin/bot.log</string>
+  </dict>
+  <!-- Relança só se sair com erro. Saída 0 = erro permanente (token inválido, segredo ausente): não fica em laço. -->
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key>
+  <dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>ExitTimeOut</key><integer>20</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/fin/bot.out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/fin/bot.err.log</string>
+</dict>
+</plist>

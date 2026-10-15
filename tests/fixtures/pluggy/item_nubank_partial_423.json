@@ -1,0 +1,35 @@
+{
+  "id": "10000000-0000-4000-8000-000000000002",
+  "connector": {
+    "id": 200,
+    "name": "MeuPluggy",
+    "credentials": [],
+    "oauth": true
+  },
+  "status": "UPDATED",
+  "executionStatus": "PARTIAL_SUCCESS",
+  "error": null,
+  "createdAt": "2026-10-01T12:00:00.000Z",
+  "updatedAt": "2026-10-15T06:05:00.000Z",
+  "lastUpdatedAt": "2026-10-15T06:05:00.000Z",
+  "statusDetail": {
+    "transactions": {
+      "isUpdated": false,
+      "lastUpdatedAt": "2026-10-12T06:00:00.000Z",
+      "warnings": [
+        {
+          "code": "423",
+          "message": "Open Finance monthly rate limit reached on product 'transactions' for this CPF/CNPJ and institution. The product could not be updated."
+        }
+      ]
+    }
+  },
+  "nextAutoSyncAt": null,
+  "consentExpiresAt": null,
+  "products": [
+    "ACCOUNTS",
+    "CREDIT_CARDS",
+    "TRANSACTIONS",
+    "PAYMENT_DATA"
+  ]
+}

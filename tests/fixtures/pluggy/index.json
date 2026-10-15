@@ -1,0 +1,21 @@
+{
+  "items": {
+    "10000000-0000-4000-8000-000000000001": "item_itau_updated.json",
+    "10000000-0000-4000-8000-000000000002": "item_nubank_partial_423.json",
+    "10000000-0000-4000-8000-000000000003": "item_santander_login_error.json"
+  },
+  "accounts": {
+    "10000000-0000-4000-8000-000000000001": "accounts_itau.json",
+    "10000000-0000-4000-8000-000000000002": "accounts_nubank.json",
+    "10000000-0000-4000-8000-000000000003": "accounts_santander.json"
+  },
+  "transactions": {
+    "a0000000-0000-4000-8000-000000000001": ["v2_transactions_itau_p1.json", "v2_transactions_itau_p2.json"],
+    "a0000000-0000-4000-8000-000000000002": ["v2_transactions_nubank_conta.json"],
+    "c0000000-0000-4000-8000-000000000002": ["v2_transactions_nubank_cartao.json"],
+    "a0000000-0000-4000-8000-000000000003": ["v2_transactions_santander.json"]
+  },
+  "bills": {
+    "c0000000-0000-4000-8000-000000000002": "bills_nubank_cartao.json"
+  }
+}

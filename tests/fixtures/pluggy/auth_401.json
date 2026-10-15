@@ -1,0 +1,5 @@
+{
+  "code": 401,
+  "codeDescription": "CLIENT_KEYS_UNAUTHORIZED",
+  "message": "Client keys are invalid"
+}
