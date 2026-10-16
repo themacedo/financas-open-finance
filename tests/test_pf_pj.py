@@ -300,3 +300,14 @@ def test_pj_billing_received_in_pf_counts_as_pj_revenue(ledger):
     assert pj["receitas"] >= 483000 and pj["fontes"].get("Cliente PJ", 0) >= 483000
     assert pfv["fontes"].get("Cliente PJ", 0) >= 483000
     assert cons["fontes"].get("Cliente PJ", 0) == pfv["fontes"].get("Cliente PJ", 0)  # consolidated counts it once
+
+
+def test_fixed_cost_paid_from_pj_account_counts_as_paid_in_pf_view(tmp_path, ledger, tax):
+    """Real case of 15/10/2026: the English teacher (a PF fixed cost) was paid by Pix from the PJ account and the
+    PF summary still listed it as pending."""
+    cfg = pj_cfg(tmp_path, fixed_costs=[{"nome": "Inglês", "valor": 250, "dia": 15, "padrao": "PROFESSOR"}])
+    data = {ACC_PJ: [tx("ing", ACC_PJ, "2026-10-15", -500.0, "PIX ENVIADO PROFESSOR EXEMPLO", op="PIX", method="PIX",
+                        payer=OWN_PJ, receiver=party("PROFESSOR EXEMPLO", "12345678909", "077", "1-1"))]}
+    run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
+    s = monthly_summary(ledger, cfg, tax, "2026-10", today=TODAY, owner="pf")
+    assert s.fixos_pendentes == []

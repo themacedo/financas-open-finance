@@ -6,10 +6,7 @@
   <key>Label</key><string>local.fin.sync</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__UV__</string><string>run</string>
-    <string>--project</string><string>__PROJECT__</string>
-    <string>--frozen</string><string>--no-dev</string>
-    <string>fin</string><string>sync</string>
+    <string>/bin/zsh</string><string>__PROJECT__/scripts/sync-diario.sh</string>
   </array>
   <key>WorkingDirectory</key><string>__PROJECT__</string>
   <key>EnvironmentVariables</key>
@@ -20,9 +17,13 @@
     <key>FIN_LOG_FILE</key><string>__HOME__/Library/Logs/fin/sync.log</string>
     <!-- prazo interno do sync (s): passou disso, sai com código 124 (fin doctor mostra) -->
     <key>FIN_SYNC_TIMEOUT</key><string>1800</string>
+    <key>FIN_UV</key><string>__UV__</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>30</integer></dict>
+  <!-- Recuperação: Mac desligado às 11:30 ou cofre fechado. O script só roda o sync se ainda não houve sucesso hoje. -->
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>3600</integer>
   <key>ProcessType</key><string>Background</string>
   <key>LowPriorityIO</key><true/>
   <key>StandardOutPath</key><string>__HOME__/Library/Logs/fin/sync.out.log</string>

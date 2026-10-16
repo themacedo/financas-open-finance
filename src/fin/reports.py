@@ -273,7 +273,10 @@ def _average_spend(ledger: Ledger, month: str, cond: str, owner: str | None = No
 
 
 def fixed_cost_status(ledger: Ledger, cfg: Config, month: str, owner: str | None = None) -> list[tuple[str, int, int, bool]]:
-    rows = ledger.active_txs(*_owner_where("(competence=? OR substr(date,1,7)=?) AND amount_cents < 0", (month, month), owner))
+    # The payment is searched in every account, whatever the view: a personal bill paid from the PJ account is
+    # still paid (`owner` only scopes the views that call this; it no longer filters where the payment came from).
+    del owner
+    rows = ledger.active_txs("(competence=? OR substr(date,1,7)=?) AND amount_cents < 0", (month, month))
     out = []
     for fc in cfg.fixed_costs:
         # paid when the matching debits of the month reach ~80% of the expected value (a R$ 20 Pix to the same
