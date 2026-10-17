@@ -170,6 +170,8 @@ def load_historico(path: Path) -> list[dict[str, Any]]:
         "aprov1Clt": _num(r.get("aprov1_clt")), "aprov1Pj": _num(r.get("aprov1_pj")),
         "constClt": _num(r.get("const_clt")), "constPj": _num(r.get("const_pj")),
         "cicloClt": _num(r.get("ciclo_clt")), "cicloPj": _num(r.get("ciclo_pj")),
+        "cyclePrClt": _num(r.get("cycle_pr_clt")), "leadPj": _num(r.get("lead_pj")),
+        "regressoesClt": _num(r.get("regressoes")), "pendenciasPj": _num(r.get("pendencias_pj")),
     } for r in rows]
 
 

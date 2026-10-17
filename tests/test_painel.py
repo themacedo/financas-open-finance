@@ -62,16 +62,17 @@ def test_plan_without_milestone_is_an_error():
 
 CSV_HEAD = ("semana,rotulo,commits_clt,commits_pj,prs_clt,bugs_resolvidos,entregas_pj,"
             "cartoes_pj,aprov1_clt,aprov1_pj,const_clt,const_pj,ciclo_clt,"
-            "ciclo_pj,fora_clt,fora_pj\n")
+            "ciclo_pj,fora_clt,fora_pj,cycle_pr_clt,lead_pj,regressoes,pendencias_pj\n")
 
 
 def test_history_keeps_unmeasured_as_null_and_weights_after_hours(tmp_path):
     csv = tmp_path / "h.csv"
-    csv.write_text(CSV_HEAD + "2026-10-10,10/10–16/10,14,13,7,3,6,3,,100,75,34.5,,,64,23\n", encoding="utf-8")
+    csv.write_text(CSV_HEAD + "2026-10-10,10/10–16/10,14,13,7,3,6,3,,100,75,34.5,,,64,23,0.5,,0,3\n", encoding="utf-8")
     [s] = load_historico(csv)
     assert (s["inicio"], s["rotulo"], s["commitsClt"], s["commitsPj"], s["prsClt"], s["entregasPj"]) == (
         "2026-10-10", "10/10", 14, 13, 7, 6)
     assert s["aprov1Clt"] is None and s["aprov1Pj"] == 100 and s["cicloClt"] is None  # empty = not measured
+    assert (s["cyclePrClt"], s["leadPj"], s["regressoesClt"], s["pendenciasPj"]) == (0.5, None, 0, 3)  # 0 is measured
     assert fora_pct(s) == 44  # (64*14 + 23*13) / 27
 
 
