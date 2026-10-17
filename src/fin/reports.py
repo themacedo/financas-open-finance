@@ -140,9 +140,9 @@ def date_range_totals(ledger: Ledger, start: str, end: str, owner: str | None = 
                                   "date >= ? AND date <= ?", (start, end), owner)
 
 
-# MEI without separation of accounts: the company only has revenue, DAS and bank fees. Anything else paid
+# MEI without separation of accounts: the company only has revenue, DAS, bank fees and the accountant. Anything else paid
 # from the PJ account is your personal spending: an implicit withdrawal from the PJ + your expense in the PF.
-PJ_OWN_CATS = {"Faturamento PJ", "Impostos/DAS", "Taxas bancárias PJ"}
+PJ_OWN_CATS = {"Faturamento PJ", "Impostos/DAS", "Taxas bancárias PJ", "Contabilidade PJ"}
 
 
 def _with_pj_billing_in_pf(ledger: Ledger, out: dict[str, Any], where: str, params: tuple, owner: str | None) -> dict[str, Any]:

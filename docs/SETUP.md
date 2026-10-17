@@ -210,7 +210,7 @@ Não renomeie colunas no Sheets: o Data Studio depende dos cabeçalhos.
 
 ### 9. launchd (10 min)
 
-1. Rode `scripts/instalar-launchd.sh`. Ele cria `local.fin.sync` (diário às 11:30, com recuperação) e `local.fin.bot` (KeepAlive).
+1. Rode `scripts/instalar-launchd.sh`. Ele cria `local.fin.sync` (diário às 18:30, com recuperação) e `local.fin.bot` (KeepAlive).
 2. Rode `launchctl kickstart gui/$(id -u)/local.fin.sync` **com a tela à vista**.
    - Se aparecer o diálogo do Keychain, clique em **Permitir sempre**. Ele volta a aparecer depois de atualizar o Python.
    - Se aparecer o pedido de acesso a pastas, documentos ou **volumes removíveis** (TCC, por causa do `/Volumes/FinVault`), autorize.
@@ -219,9 +219,13 @@ Não renomeie colunas no Sheets: o Data Studio depende dos cabeçalhos.
    Se algo foi bloqueado em silêncio: Ajustes > Privacidade e Segurança > Arquivos e Pastas.
 4. Rode `uv run fin doctor`: ele mostra o último código de saída de cada job.
 5. Logs ficam em `~/Library/Logs/fin/`. Para remover: `scripts/desinstalar-launchd.sh`.
-6. **Recuperação:** o `local.fin.sync` chama `scripts/sync-diario.sh` às 11:30, ao fazer login e de hora em hora.
-   O script só roda o sync depois das 11:30 e se ainda não houve sync com sucesso no dia. Assim, um Mac desligado no
-   horário sincroniza ao ligar.
+6. **Recuperação:** o `local.fin.sync` chama `scripts/sync-diario.sh` às 18:30, ao fazer login e de hora em hora.
+   - **Por que 18:30:** o `fin sync` lê o que o Pluggy já buscou, e o Pluggy busca nos bancos uma vez por dia, perto
+     das 17:20–18:05. Um sync de manhã só leria os dados da tarde anterior.
+     Não dá para forçar essa busca pela API: no Meu Pluggy, `PATCH /items/{id}` responde 400 "MeuPluggy item cant be
+     updated" (testado em 17/10/2026). Para dados mais novos, atualize as contas em meu.pluggy.ai e rode o sync.
+   - O script só roda o sync se não houve sync com sucesso desde as 18:30 mais recentes (hoje, se já passou; senão,
+     ontem). Assim, um Mac desligado à noite sincroniza ao ligar na manhã seguinte.
    - Cofre fechado (depois de reiniciar): abre uma janela do macOS pedindo a senha do cofre. A senha vai direto para o
      `hdiutil` e não é gravada. "Agora não" pergunta de novo na hora seguinte. Na primeira vez, o macOS pede
      permissão para o System Events: autorize.

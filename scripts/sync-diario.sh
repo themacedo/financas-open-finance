@@ -1,6 +1,8 @@
 #!/bin/zsh
-# Sync diário com recuperação: o launchd chama este script às 11:30, ao fazer login e a cada hora.
-# Ele só roda o `fin sync` se já passou das 11:30 e ainda não houve sync com sucesso hoje.
+# Sync diário com recuperação: o launchd chama este script às 18:30, ao fazer login e a cada hora.
+# 18:30 porque o Pluggy busca nos bancos uma vez por dia, perto das 17:20-18:05; antes disso o sync só
+# leria os dados da tarde anterior. Ele só roda o `fin sync` se não houve sync com sucesso desde as
+# 18:30 mais recentes (hoje, se já passou; senão, ontem). Assim um Mac desligado à noite sincroniza ao ligar.
 # Cofre fechado (depois de um reboot): pede a senha numa janela do macOS; a senha vai direto
 # para o hdiutil pela entrada padrão e não é gravada em lugar nenhum. Cancelou: pergunta de novo na hora seguinte.
 set -uo pipefail
@@ -10,16 +12,18 @@ UV="${FIN_UV:-$HOME/.local/bin/uv}"
 VAULT="${VAULT:-$HOME/Vaults/FinVault.sparsebundle}"
 MOUNT="/Volumes/FinVault"
 LOG="${FIN_LOG_FILE:-$HOME/Library/Logs/fin/sync.log}"
-HORA_MINIMA="${FIN_SYNC_APOS:-1130}"
+HORA_MINIMA="${FIN_SYNC_APOS:-1830}"
 LOCK="${TMPDIR:-/tmp}/fin-sync-diario.lock"
 
 avisar() {  # notificação do macOS (título, texto)
   /usr/bin/osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
 }
 
-# 1. Cedo demais ou já sincronizado hoje: nada a fazer.
-[[ "$(date +%H%M)" -lt "$HORA_MINIMA" ]] && exit 0
-grep -q "^$(date +%F) .*sync success" "$LOG" 2>/dev/null && exit 0
+# 1. Já sincronizado depois das 18:30 mais recentes: nada a fazer.
+if [[ "$(date +%H%M)" -ge "$HORA_MINIMA" ]]; then dia="$(date +%F)"; else dia="$(date -v-1d +%F)"; fi
+marco="$dia ${HORA_MINIMA[1,2]}:${HORA_MINIMA[3,4]}"
+ultimo="$(grep ' sync success' "$LOG" 2>/dev/null | tail -1 | cut -c1-16)"
+[[ -n "$ultimo" && ! "$ultimo" < "$marco" ]] && exit 0
 
 # 2. Uma execução por vez (login e o intervalo de 1 h podem coincidir).
 mkdir "$LOCK" 2>/dev/null || exit 0

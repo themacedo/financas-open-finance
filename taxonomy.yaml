@@ -27,6 +27,7 @@ categorias:
   Impostos/Taxas: {natureza: Despesa,       necessidade: variavel, llm: true}
   Impostos/DAS:   {natureza: Despesa,       necessidade: fixo,     llm: false}
   Taxas bancárias PJ: {natureza: Despesa,   necessidade: variavel, llm: false}
+  Contabilidade PJ: {natureza: Despesa,     necessidade: variavel, llm: false}
   Hobby:           {natureza: Despesa,       necessidade: variavel, llm: true}
   Jurídico:       {natureza: Despesa,       necessidade: fixo,     llm: false}
   Família:        {natureza: Despesa,       necessidade: variavel, llm: false}

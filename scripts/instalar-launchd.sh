@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Instala os 2 LaunchAgents (sync diário 11:30 com recuperação ao ligar e de hora em hora, e bot; LABELS=local.fin.sync para só o sync). Você roda; nada é feito com sudo.
+# Instala os 2 LaunchAgents (sync diário 18:30 com recuperação ao ligar e de hora em hora, e bot; LABELS=local.fin.sync para só o sync). Você roda; nada é feito com sudo.
 set -euo pipefail
 PROJECT="${0:A:h:h}"
 UV="${UV:-$HOME/.local/bin/uv}"
