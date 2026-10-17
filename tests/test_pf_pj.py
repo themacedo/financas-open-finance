@@ -311,3 +311,14 @@ def test_fixed_cost_paid_from_pj_account_counts_as_paid_in_pf_view(tmp_path, led
     run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
     s = monthly_summary(ledger, cfg, tax, "2026-10", today=TODAY, owner="pf")
     assert s.fixos_pendentes == []
+
+
+def test_fixed_cost_pattern_accepts_alternatives(tmp_path, ledger, tax):
+    """Real case of 16/10/2026: the PGFN installment was paid by Pix and came as MINISTERIO DA FAZENDA."""
+    cfg = pj_cfg(tmp_path, fixed_costs=[{"nome": "MEI - Desenrola", "valor": 108.12, "dia": 30,
+                                         "padrao": "PGFN | MINISTERIO DA FAZENDA"}])
+    data = {ACC_PJ: [tx("pgfn", ACC_PJ, "2026-10-16", -108.12, "PIX ENVIADO MINISTERIO DA FAZENDA", op="PIX", method="PIX",
+                        payer=OWN_PJ, receiver=party("MINISTERIO DA FAZENDA", "00394460000141", "001", "1-1"))]}
+    run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
+    s = monthly_summary(ledger, cfg, tax, "2026-10", today=TODAY, owner="pf")
+    assert s.fixos_pendentes == []

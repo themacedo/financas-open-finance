@@ -11,7 +11,7 @@ import plistlib
 import subprocess
 import sys
 import threading
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fin import secrets
@@ -233,6 +233,13 @@ def _sync(args, cfg, tax, ledger) -> int:
             log.info("publish: %s", st)
         except Exception as exc:  # noqa: BLE001 - Sheets failing must not lose the sync
             alerts.append(f"Sheets: falha ao publicar ({type(exc).__name__})")
+    try:
+        from fin.painel import export_painel
+
+        if (out := export_painel(ledger, cfg.data_dir, date.today(), datetime.now().astimezone(), cfg)):
+            log.info("painel: %s", out.name)
+    except Exception as exc:  # noqa: BLE001 - the dashboard failing must not lose the sync
+        alerts.append(f"Painel: falha ao gerar ({type(exc).__name__}: {exc})")
     pend = ledger.one("SELECT COUNT(*) n FROM transactions WHERE review_status='pendente' AND removed_upstream=0")["n"]
     if alerts and not args.no_notify:
         _notify(cfg, "fin sync:\n" + "\n".join(f"- {a}" for a in alerts) + (f"\n{pend} pendente(s) de revisão." if pend else ""))
@@ -310,6 +317,18 @@ def cmd_report(args) -> int:
             print("\n(analista: Anthropic não configurada)")
         else:
             print("\nAnalista (recebeu só agregados):\n" + (cat.analyze(aggregates_for_analyst(s)) or "(sem resposta)"))
+    return 0
+
+
+def cmd_painel(args) -> int:
+    from fin.painel import export_painel
+
+    cfg, _tax, ledger = _open()
+    try:
+        out = export_painel(ledger, cfg.data_dir, date.today(), datetime.now().astimezone(), cfg)
+    finally:
+        ledger.close()
+    print(f"painel: {out}" if out else f"painel: sem {cfg.data_dir / 'plano.yaml'}, nada gerado")
     return 0
 
 
@@ -501,6 +520,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("caju", help="importa o CSV/YAML do Caju")
     s.add_argument("--file")
     s.set_defaults(fn=cmd_caju)
+
+    s = sub.add_parser("painel", help="gera painel.json (só agregados) a partir do plano.yaml")
+    s.set_defaults(fn=cmd_painel)
 
     s = sub.add_parser("doctor", help="checa ambiente, cofre, segredos e launchd (sem rede)")
     s.set_defaults(fn=cmd_doctor)

@@ -235,6 +235,23 @@ Não renomeie colunas no Sheets: o Data Studio depende dos cabeçalhos.
    Token do bot inválido ou segredo ausente: o bot sai e o launchd **não** o relança em laço; corrija e rode
    `scripts/instalar-launchd.sh` de novo.
 
+### 10. Painel web (opcional)
+
+O sync também gera um `painel.json` só com agregados para o [painel em Next.js](https://github.com/themacedo/painel):
+saldo por conta, o plano do mês, o gasto do dia a dia, contas fixas, parcelas e contagens por semana.
+Nenhum lançamento, contraparte ou credencial.
+
+1. Crie `plano.yaml` dentro do `data_dir` (fica no cofre, nunca no git). Campos: `plano` (itens com `data`,
+   `descricao`, `entra` ou `sai`, `feito` e um com `marco: true`), `marco` (`titulo`, `sobra_ate`), `meta`
+   (`alvo`, `depositos`), `dia_a_dia` (`orcamento`, `desde`, `ate`, `categorias`, `excluir`) e, se quiser,
+   `empresas` (nome, cor e logo), `compromissos` e `fixos_nomes`. Descrição com vírgula vai entre aspas.
+2. `uv run fin painel` gera o arquivo; depois de cada sync ele é gerado sozinho (uma falha só vira alerta).
+3. `scripts/publicar-painel.sh` envia o JSON para um repositório **privado** clonado em `<data_dir>/painel-dados`;
+   o site lê esse repositório com um token só de leitura.
+
+Contas fixas: o `padrao` aceita alternativas separadas por `|`, para a mesma conta que chega como boleto ou
+como Pix com outro nome (`padrao: "PGFN|MINISTERIO DA FAZENDA"`).
+
 ### Desfazer tudo
 
 ```

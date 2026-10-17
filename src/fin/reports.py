@@ -281,8 +281,10 @@ def fixed_cost_status(ledger: Ledger, cfg: Config, month: str, owner: str | None
     for fc in cfg.fixed_costs:
         # paid when the matching debits of the month reach ~80% of the expected value (a R$ 20 Pix to the same
         # person does not mark a R$ 1.660 installment as paid; two R$ 99,99 plans cover R$ 199,98)
+        # padrao accepts alternatives separated by "|" (the same bill may come as boleto or as Pix to another name)
+        padroes = [x.strip() for x in fc.padrao.split("|") if x.strip()]
         hits = sum(-r["amount_cents"] for r in rows
-                   if fc.padrao in (r["desc_norm"] or "") or fc.padrao in (r["description"] or "").upper())
+                   if any(x in (r["desc_norm"] or "") or x in (r["description"] or "").upper() for x in padroes))
         paid = hits > 0 and hits >= 0.8 * fc.valor_cents
         out.append((fc.nome, fc.valor_cents, fc.dia, paid))
     return out
