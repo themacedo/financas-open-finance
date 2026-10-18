@@ -184,6 +184,39 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE accounts ADD COLUMN owner TEXT NOT NULL DEFAULT 'pf';
     """,
+    # v3: loans (personal credit, renegotiations). The debt enters the net position; amounts in cents.
+    """
+    CREATE TABLE loans (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        product TEXT,
+        contract_date TEXT,
+        contract_cents INTEGER,
+        cet REAL,                    -- annual effective cost, as a fraction (2.16 = 216% a.a.)
+        installments_total INTEGER,
+        installments_paid INTEGER,
+        first_due_date TEXT,
+        settlement_date TEXT,
+        outstanding_cents INTEGER,   -- what is owed today, interest to date included
+        next_installment_cents INTEGER,
+        updated_at TEXT NOT NULL
+    );
+    """,
+    # v4: investments (balance today) and, for loans and investments, the mirror item whose accounts move them
+    """
+    CREATE TABLE investments (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        mirror_item_id TEXT,
+        type TEXT,
+        subtype TEXT,
+        name TEXT,
+        balance_cents INTEGER NOT NULL DEFAULT 0,
+        status TEXT,
+        updated_at TEXT NOT NULL
+    );
+    ALTER TABLE loans ADD COLUMN mirror_item_id TEXT;
+    """,
 ]
 
 

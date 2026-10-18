@@ -324,6 +324,48 @@ def upsert_bills(ledger: Ledger, account_id: str, bills: list[dict[str, Any]]) -
     return len(bills)
 
 
+def upsert_investments(ledger: Ledger, item_id: str, invs: list[dict[str, Any]], mirror_item_id: str | None = None) -> int:
+    from fin.ledger import now_iso
+
+    with ledger.tx():
+        for v in invs:
+            ledger.x(
+                "INSERT INTO investments(id,item_id,mirror_item_id,type,subtype,name,balance_cents,status,updated_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET mirror_item_id=excluded.mirror_item_id, "
+                "type=excluded.type, subtype=excluded.subtype, name=excluded.name, balance_cents=excluded.balance_cents, "
+                "status=excluded.status, updated_at=excluded.updated_at",
+                (v["id"], item_id, mirror_item_id, v.get("type"), v.get("subtype"), v.get("name"),
+                 to_cents(v.get("balance") or 0), v.get("status"), now_iso()))
+    return len(invs)
+
+
+def upsert_loans(ledger: Ledger, item_id: str, loans: list[dict[str, Any]], mirror_item_id: str | None = None) -> int:
+    from fin.ledger import now_iso
+
+    day = lambda v: str(v or "")[:10] or None
+    with ledger.tx():
+        for ln in loans:
+            inst, pay = ln.get("installments") or {}, ln.get("payments") or {}
+            ledger.x(
+                "INSERT INTO loans(id,item_id,product,contract_date,contract_cents,cet,installments_total,installments_paid,"
+                "first_due_date,settlement_date,outstanding_cents,next_installment_cents,updated_at,mirror_item_id) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET product=excluded.product, contract_date=excluded.contract_date, "
+                "contract_cents=excluded.contract_cents, cet=excluded.cet, installments_total=excluded.installments_total, "
+                "installments_paid=excluded.installments_paid, first_due_date=excluded.first_due_date, "
+                "settlement_date=excluded.settlement_date, outstanding_cents=excluded.outstanding_cents, "
+                "next_installment_cents=excluded.next_installment_cents, updated_at=excluded.updated_at, "
+                "mirror_item_id=excluded.mirror_item_id",
+                (ln["id"], item_id, ln.get("productName"), day(ln.get("contractDate")), to_cents(ln.get("contractAmount") or 0),
+                 ln.get("CET"), inst.get("totalNumberOfInstallments"), inst.get("paidInstallments"),
+                 day(ln.get("firstInstallmentDueDate")), day(ln.get("settlementDate")),
+                 to_cents(pay.get("contractOutstandingBalance") if pay.get("contractOutstandingBalance") is not None
+                          else ln.get("totalRemainingAmount") or 0),
+                 to_cents(ln.get("nextInstallmentAmount") or 0), now_iso(), mirror_item_id),
+            )
+    return len(loans)
+
+
 def run_sync(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, *, today: date | None = None,
              now: datetime | None = None) -> SyncResult:
     today = today or date.today()
@@ -404,6 +446,18 @@ def _sync_body(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, to
             except (PluggyError, httpx.TransportError) as exc:
                 result.stats["bills_unavailable"] += 1
                 log.info("faturas indisponíveis (%s); usando creditData", getattr(exc, "status", type(exc).__name__))
+
+    # 2b) loans and investments: the Meu Pluggy mirror item does not relay loans; `bank_item_id` is the bank's own item
+    for it in cfg.items:
+        bid = it.get("bank_item_id")
+        if not bid:
+            continue
+        for what, fetch, upsert in (("empréstimos", client.list_loans, upsert_loans),
+                                    ("investimentos", client.list_investments, upsert_investments)):
+            try:
+                result.stats[what] += upsert(ledger, bid, fetch(bid), it.get("item_id"))
+            except (PluggyError, httpx.TransportError) as exc:
+                result.alerts.append(f"{it.get('bank', 'item')}: {what} indisponíveis ({getattr(exc, 'status', type(exc).__name__)})")
 
     # 3) deterministic rules + installment projection
     for k, v in apply_all(ledger, cfg, tax, today=today).items():

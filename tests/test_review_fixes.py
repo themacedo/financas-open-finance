@@ -480,8 +480,9 @@ def test_card_payment_listed_under_two_bills_counts_once(ledger, cfg, tax):
     rules = {_row(ledger, p)["rule"] for p in ("pay", "dup")}
     assert rules == {"card_bill_payment", "card_payment_duplicate"}
     # contas 6800 and card 1000 today; on 07/10 the bank had the 700 still and the card owed 1000 - 200 + 700
-    assert posicao_em(ledger, TODAY, TODAY) == {"contas": 6800.0, "cartao": 1000.0, "posicao": -(1000.0 - 6800.0)}
-    assert posicao_em(ledger, date(2026, 10, 7), TODAY) == {"contas": 7500.0, "cartao": 1500.0, "posicao": 6000.0}
+    sem_extras = lambda d: {k: d[k] for k in ("contas", "cartao", "posicao")}
+    assert sem_extras(posicao_em(ledger, TODAY, TODAY)) == {"contas": 6800.0, "cartao": 1000.0, "posicao": 5800.0}
+    assert sem_extras(posicao_em(ledger, date(2026, 10, 7), TODAY)) == {"contas": 7500.0, "cartao": 1500.0, "posicao": 6000.0}
 
 
 def test_two_real_payments_of_the_same_value_are_not_duplicates(ledger, cfg, tax):
@@ -511,3 +512,45 @@ def test_month_close_reconciles_with_the_net_position_to_the_cent(ledger, cfg, t
     variacao = p["posicao"]["fim"]["posicao"] - p["posicao"]["inicio"]["posicao"]
     assert a["emprestimos"] == round(1000 - 233.89, 2) and a["naoExplicado"] == 0
     assert round(resultado + sum(v for k, v in a.items() if k != "naoExplicado"), 2) == round(variacao, 2)
+
+
+def test_loan_investment_and_installments_enter_the_position(ledger, cfg, tax):
+    import conftest
+    from fin.painel import compute_periodo, posicao_em
+    from fin.pluggy import MemoryPluggyClient
+
+    for it in cfg.items:
+        if it["bank"] == "nubank":
+            it["bank_item_id"] = "BANCO_NU"
+    parc = lambda n, day: tx(f"p{n}", C, day, 100.0, f"LOJA X {n}/3", card=True,
+                             ccm={"installmentNumber": n, "totalInstallments": 3, "purchaseDate": "2026-09-05",
+                                  "billForecastDate": day[:7]})
+    data = {I: [], S: [], C: [parc(1, "2026-09-05"), parc(2, "2026-10-05"), parc(3, "2026-11-05")],
+            NB: [tx("dep", NB, "2026-08-01", 1000.0, "Depósito de empréstimo", op="OPERACAO_CREDITO"),
+                 tx("q1", NB, "2026-09-01", -250.0, "Parcela Paga | Renegociação", op="OPERACAO_CREDITO"),
+                 tx("q2", NB, "2026-10-01", -250.0, "Parcela Paga | Renegociação", op="OPERACAO_CREDITO"),
+                 tx("apl", NB, "2026-09-10", -300.0, "Aplicação RDB")]}
+    loan = {"id": "L1", "productName": "Credito Pessoal", "contractDate": "2026-08-01", "contractAmount": 1000, "CET": 0,
+            "firstInstallmentDueDate": "2026-09-01", "settlementDate": None, "nextInstallmentAmount": 250,
+            "installments": {"totalNumberOfInstallments": 4, "paidInstallments": 2},
+            "payments": {"contractOutstandingBalance": 500}}
+    inv = {"id": "V1", "type": "FIXED_INCOME", "subtype": "CDB", "name": "CDB", "balance": 300, "status": "ACTIVE"}
+    client = MemoryPluggyClient({iid: conftest.item(iid) for iid in conftest.ITEMS.values()}, conftest.accounts(), data,
+                                loans={"BANCO_NU": [loan]}, investments={"BANCO_NU": [inv]})
+    run_sync(ledger, client, cfg, tax, today=TODAY, now=NOW)
+    assert _row(ledger, "apl")["natureza"] == "Investimento"
+
+    # end of August: no installment purchase yet, nothing invested, whole loan owed
+    ago = posicao_em(ledger, date(2026, 8, 31), TODAY)
+    assert (ago["cartao"], ago["investimentos"], ago["emprestimos"]) == (700.0, 0.0, 1000.0)
+    # end of September: the 3x purchase weighs whole on the card, 300 invested, one installment paid
+    st = posicao_em(ledger, date(2026, 9, 30), TODAY)
+    assert (st["cartao"], st["investimentos"], st["emprestimos"]) == (1000.0, 300.0, 750.0)
+    assert posicao_em(ledger, TODAY, TODAY)["emprestimos"] == 500.0  # today: what the bank reports
+
+    p = compute_periodo(ledger, {}, date(2026, 9, 1), date(2026, 10, 1), date(2026, 8, 1), date(2026, 9, 1), TODAY)
+    e, a = p["entradas"], p["ajustes"]
+    resultado = e["clt"] + e["pj"] + e["outros"] - p["resumo"]["despesas"] - e["custosPj"]
+    assert resultado == -100.0  # only the first installment is September spending
+    assert (a["parcelado"], a["emprestimos"], a["aplicacoes"], a["naoExplicado"]) == (-200.0, 0.0, 0.0, 0.0)
+    assert round(p["posicao"]["fim"]["posicao"] - p["posicao"]["inicio"]["posicao"], 2) == -300.0

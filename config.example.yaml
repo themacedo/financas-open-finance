@@ -11,9 +11,11 @@ pluggy:
   # itemIds copiados do dashboard da Pluggy (Demo > Connected Items), 1 por banco.
   # owner: pf (padrão) ou pj. A conta da sua empresa (MEI) é pj: os números dela saem separados
   # e Pix entre PF e PJ vira "Retirada PJ→PF" / "Aporte PF→PJ" (Transferência).
+  # bank_item_id (opcional): o item do próprio banco (meu.pluggy.ai > Conexões > o id na URL). O espelho do
+  # Meu Pluggy não repassa empréstimos; empréstimos e investimentos são lidos daqui e entram na posição.
   items:
     - {bank: itau, item_id: "COLE-O-ITEM-ID-DO-ITAU"}
-    - {bank: nubank, item_id: "COLE-O-ITEM-ID-DO-NUBANK"}
+    - {bank: nubank, item_id: "COLE-O-ITEM-ID-DO-NUBANK", bank_item_id: "COLE-O-ID-DA-CONEXAO-NUBANK"}
     - {bank: santander, item_id: "COLE-O-ITEM-ID-DO-SANTANDER"}
     - {bank: nubank_pj, item_id: "COLE-O-ITEM-ID-DO-NUBANK-EMPRESAS", owner: pj}
   window_days: 45            # janela de releitura diária

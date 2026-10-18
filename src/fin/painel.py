@@ -385,24 +385,100 @@ def compute_cobertura(ledger: Ledger, ini: date, ate: date) -> dict[str, float]:
     return {"rotativo": _reais(rot), "pixCredito": _reais(pix), "resgates": _reais(resg), "jurosRotativo": _reais(juros)}
 
 
+def _inicio_dados(ledger: Ledger) -> str | None:
+    return ledger.one("SELECT MIN(date) d FROM transactions")["d"]
+
+
+def divida_emprestimo(ledger: Ledger, loan: Any, dia: date, today: date) -> int:
+    """Outstanding balance of one loan at the end of `dia`, in cents. Today: what the bank reports. Before: the
+    PRICE schedule from the contract (monthly rate from the CET), counting the installments actually paid by
+    then (the loan payments seen in the accounts; they are rarely paid on the due day)."""
+    contrato = loan["contract_date"]
+    if not contrato or dia.isoformat() < contrato or (loan["settlement_date"] and dia.isoformat() >= loan["settlement_date"]):
+        return 0
+    if dia >= today:
+        return loan["outstanding_cents"] or 0
+    n, pv = loan["installments_total"] or 0, loan["contract_cents"] or 0
+    if not n:
+        return pv
+    fim = loan["settlement_date"] or today.isoformat()
+    datas = [r["date"] for r in ledger.active_txs("rule='debt_payment' AND date >= ? AND date <= ?", (contrato, fim))]
+    inicio = _inicio_dados(ledger) or contrato
+    if contrato >= inicio:  # the whole loan is in the data
+        pagas = sum(1 for d in datas if d <= dia.isoformat())
+    else:  # installments before the data started: from the count the bank reports
+        pagas = (loan["installments_paid"] or 0) - sum(1 for d in datas if d > dia.isoformat())
+    resta = n - max(0, pagas)
+    if resta <= 0:
+        return 0
+    i = (1 + (loan["cet"] or 0)) ** (1 / 12) - 1
+    if i <= 0:
+        return round(pv * resta / n)
+    parcela = pv * i / (1 - (1 + i) ** -n)
+    return round(parcela * (1 - (1 + i) ** -resta) / i)
+
+
+def _antes_dos_dados(ledger: Ledger, dia: date) -> date:
+    # before the first transaction there is nothing to compare with: use the day the data starts
+    primeiro = _inicio_dados(ledger)
+    return date.fromisoformat(primeiro) - timedelta(days=1) if primeiro and dia.isoformat() < primeiro else dia
+
+
+def dividas_emprestimo(ledger: Ledger, dia: date, today: date) -> int:
+    dia = _antes_dos_dados(ledger, dia)
+    return sum(divida_emprestimo(ledger, ln, dia, today) for ln in ledger.q("SELECT * FROM loans"))
+
+
+def investimentos_em(ledger: Ledger, dia: date, today: date) -> int:
+    """Invested balance at the end of `dia`, for the banks that report it: today's balance minus what was applied
+    after `dia` plus what was redeemed (the Investimento rows of that bank's accounts)."""
+    total = 0
+    for m in ledger.q("SELECT mirror_item_id m, SUM(balance_cents) s FROM investments WHERE mirror_item_id IS NOT NULL "
+                      "GROUP BY mirror_item_id"):
+        depois = 0
+        if dia < today:
+            depois = ledger.one("SELECT COALESCE(SUM(t.amount_cents),0) s FROM transactions t JOIN accounts a ON a.id=t.account_id "
+                                "WHERE a.item_id=? AND t.natureza='Investimento' AND t.date>? AND t.date<=? AND t.removed_upstream=0",
+                                (m["m"], dia.isoformat(), today.isoformat()))["s"]
+        total += max(0, (m["s"] or 0) + depois)
+    return total
+
+
+EFETIVA_CARTAO = ("CASE WHEN COALESCE(total_installments,0)>1 AND purchase_date IS NOT NULL THEN purchase_date "
+                  "ELSE date END")
+
+
+def _cartao_depois(ledger: Ledger, account_id: str, dia: date, today: date) -> int:
+    """Card rows that hit the limit after `dia`: an installment purchase weighs whole on the purchase day (its
+    later installments, even future-dated ones, were already in the used limit), everything else on its date."""
+    from fin.rules import CARD_PAYMENT_DUP
+
+    return ledger.one(f"SELECT COALESCE(SUM(amount_cents),0) s FROM transactions WHERE account_id=? AND removed_upstream=0 "
+                      f"AND COALESCE(rule,'')!=? AND {EFETIVA_CARTAO}>? AND {EFETIVA_CARTAO}<=?",
+                      (account_id, CARD_PAYMENT_DUP, dia.isoformat(), today.isoformat()))["s"]
+
+
 def posicao_em(ledger: Ledger, dia: date, today: date) -> dict[str, float]:
-    """Money in the bank accounts minus everything owed on the cards at the end of `dia`, rebuilt backwards from the
+    """Money in the bank accounts and investments minus everything owed on the cards and loans at the end of `dia`, rebuilt backwards from the
     balances Pluggy reports today. Scheduled rows (a pending salary, future installments the card limit already
     holds) stay out. A card payment the aggregator listed twice does not lower the debt twice."""
     from fin.rules import CARD_PAYMENT_DUP
 
+    dia = _antes_dos_dados(ledger, dia)
     contas = cartao = 0
     for a in ledger.accounts():
         if a["type"] not in ("BANK", "CREDIT") or a["balance_cents"] is None:
             continue
-        depois = ledger.one("SELECT COALESCE(SUM(amount_cents),0) s FROM transactions WHERE account_id=? AND date>? AND date<=? "
-                            "AND removed_upstream=0 AND COALESCE(rule,'')!=?",
-                            (a["id"], dia.isoformat(), today.isoformat(), CARD_PAYMENT_DUP))["s"] if dia < today else 0
         if a["type"] == "BANK":
-            contas += a["balance_cents"] - depois
-        else:  # balance = used limit; purchases after `dia` are negative rows, payments positive
-            cartao += a["balance_cents"] + depois
-    return {"contas": _reais(contas), "cartao": _reais(cartao), "posicao": _reais(contas - cartao)}
+            depois = ledger.one("SELECT COALESCE(SUM(amount_cents),0) s FROM transactions WHERE account_id=? AND date>? "
+                                "AND date<=? AND removed_upstream=0", (a["id"], dia.isoformat(), today.isoformat()))["s"]
+            contas += a["balance_cents"] - (depois if dia < today else 0)
+        else:  # balance = used limit, every future installment included; purchases are negative rows, payments positive
+            cartao += a["balance_cents"] + (_cartao_depois(ledger, a["id"], dia, today) if dia < today else 0)
+    emprestimos = dividas_emprestimo(ledger, dia, today)
+    invest = investimentos_em(ledger, dia, today)
+    return {"contas": _reais(contas), "investimentos": _reais(invest), "cartao": _reais(cartao),
+            "emprestimos": _reais(emprestimos), "posicao": _reais(contas + invest - cartao - emprestimos)}
 
 
 def posicao_serie(ledger: Ledger, today: date, n_semanas: int = 12, n_meses: int = 12) -> dict[str, list[dict[str, Any]]]:
@@ -424,13 +500,24 @@ DIVIDA_RULES = ("debt_payment", "loan_received")
 PIX_CREDITO_RULES = ("card_credit_op", "card_limit_to_account")
 
 
-def compute_ajustes(ledger: Ledger, ini: date, ate: date, resultado_cents: int, variacao_cents: int) -> dict[str, float]:
+def compute_ajustes(ledger: Ledger, ini: date, ate: date, resultado_cents: int, variacao_cents: int,
+                    divida_delta_cents: int = 0, invest_delta_cents: int = 0) -> dict[str, float]:
     """What moves the accounts and the card debt without being income or spending, so that
     resultado + ajustes = variação da posição. `naoExplicado` is the leftover: zero when every row is accounted for."""
     from fin.rules import CARD_PAYMENT_DUP
 
-    rows = [r for r in ledger.active_txs("date >= ? AND date <= ?", (ini.isoformat(), ate.isoformat()))
-            if r["rule"] != CARD_PAYMENT_DUP and r["natureza"] in ("Transferência", "Investimento")]
+    cartoes = {a["id"] for a in ledger.accounts() if a["type"] == "CREDIT"}
+    parcela = lambda r: r["account_id"] in cartoes and (r["total_installments"] or 0) > 1 and r["purchase_date"]
+    todas = [r for r in ledger.active_txs("date >= ? AND date <= ?", (ini.isoformat(), ate.isoformat()))
+             if r["rule"] != CARD_PAYMENT_DUP]
+    rows = [r for r in todas if r["natureza"] in ("Transferência", "Investimento") and not parcela(r)]
+    # installment purchases made in the period (every installment, future ones included) against the installments
+    # that fell in it and were counted as spending
+    desde = max(ini, _antes_dos_dados(ledger, ini) + timedelta(days=1)) if ini.isoformat() < (_inicio_dados(ledger) or "") else ini
+    assumido = sum(r["amount_cents"] for r in ledger.active_txs("purchase_date >= ? AND purchase_date <= ? AND COALESCE(total_installments,0) > 1",
+                                                                 (desde.isoformat(), ate.isoformat())) if parcela(r))
+    lancado = sum(r["amount_cents"] for r in todas if parcela(r) and (r["natureza"] or "Despesa") in ("Despesa", "Receita"))
+    parcelado = assumido - lancado
     soma = lambda f: sum(r["amount_cents"] for r in rows if f(r))
     contas_fora = soma(lambda r: r["rule"] in ("own_transfer", "own_transfer_extra") and not r["pair_id"])
     pix = soma(lambda r: r["rule"] in PIX_CREDITO_RULES)
@@ -439,8 +526,14 @@ def compute_ajustes(ledger: Ledger, ini: date, ate: date, resultado_cents: int, 
     # own transfers between connected accounts, bill payments and the rotativo pair cancel out; what is left is
     # a transfer to someone outside (a person marked as transfer, a service fee)
     outras = soma(lambda r: r["natureza"] == "Transferência") - contas_fora - pix - dividas
-    nao = variacao_cents - resultado_cents - contas_fora - pix - dividas - aplic - outras
-    return {"contasFora": _reais(contas_fora), "custoPixCredito": _reais(pix), "emprestimos": _reais(dividas),
+    # the loan money in and the installments out, against what the debt moved: what is left is interest and fees
+    # (and the cost of a renegotiation, that raises the debt with no money moving)
+    custo_emp = dividas - divida_delta_cents
+    # money sent to an investment the bank reports is still yours: only the yield (and the sweeps of banks that
+    # do not report the balance) stays here
+    aplic = aplic + invest_delta_cents
+    nao = variacao_cents - resultado_cents - contas_fora - pix - custo_emp - aplic - outras - parcelado
+    return {"parcelado": _reais(parcelado), "contasFora": _reais(contas_fora), "custoPixCredito": _reais(pix), "emprestimos": _reais(custo_emp),
             "aplicacoes": _reais(aplic), "outrasTransferencias": _reais(outras), "naoExplicado": _reais(nao)}
 
 
@@ -476,7 +569,9 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
         "cobertura": compute_cobertura(ledger, ini, ate),
         "posicao": posicao,
         "ajustes": compute_ajustes(ledger, ini, ate, entrou_cents - atual["despesas"] - custos_pj,
-                                   _cents(posicao["fim"]["posicao"]) - _cents(posicao["inicio"]["posicao"])),
+                                   _cents(posicao["fim"]["posicao"]) - _cents(posicao["inicio"]["posicao"]),
+                                   _cents(posicao["fim"]["emprestimos"]) - _cents(posicao["inicio"]["emprestimos"]),
+                                   _cents(posicao["fim"]["investimentos"]) - _cents(posicao["inicio"]["investimentos"])),
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnterior": _reais(antes["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),

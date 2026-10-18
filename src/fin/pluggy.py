@@ -35,6 +35,8 @@ class PluggyAPI(Protocol):
     def list_transactions(self, account_id: str, *, date_from: str | None = None,
                           date_to: str | None = None, created_at_from: str | None = None) -> list[dict[str, Any]]: ...
     def list_bills(self, account_id: str) -> list[dict[str, Any]]: ...
+    def list_loans(self, item_id: str) -> list[dict[str, Any]]: ...
+    def list_investments(self, item_id: str) -> list[dict[str, Any]]: ...
 
 
 class HttpPluggyClient:
@@ -136,6 +138,12 @@ class HttpPluggyClient:
                 return out
             page += 1
 
+    def list_loans(self, item_id: str) -> list[dict[str, Any]]:
+        return self._get("/loans", {"itemId": item_id}).get("results") or []
+
+    def list_investments(self, item_id: str) -> list[dict[str, Any]]:
+        return self._get("/investments", {"itemId": item_id}).get("results") or []
+
 
 class FixturePluggyClient:
     """Serves Pluggy-shaped JSON from a directory (demo/tests). No network."""
@@ -177,14 +185,21 @@ class FixturePluggyClient:
             raise PluggyError(400, "BILLS_NOT_AVAILABLE")
         return self._load(name).get("results", [])
 
+    def list_loans(self, item_id: str) -> list[dict[str, Any]]:
+        return (self._load(self.index.get("loans", {}).get(item_id)) or {}).get("results", [])
+
+    def list_investments(self, item_id: str) -> list[dict[str, Any]]:
+        return (self._load(self.index.get("investments", {}).get(item_id)) or {}).get("results", [])
+
 
 class MemoryPluggyClient:
     """In-memory fake used by tests: mutate `.transactions[account_id]` between syncs."""
 
     def __init__(self, items: dict[str, dict], accounts: dict[str, list[dict]],
-                 transactions: dict[str, list[dict]], bills: dict[str, list[dict]] | None = None):
+                 transactions: dict[str, list[dict]], bills: dict[str, list[dict]] | None = None,
+                 loans: dict[str, list[dict]] | None = None, investments: dict[str, list[dict]] | None = None):
         self.items, self.accounts, self.transactions = items, accounts, transactions
-        self.bills = bills or {}
+        self.bills, self.loans, self.investments = bills or {}, loans or {}, investments or {}
         self.calls: list[tuple] = []
 
     def get_item(self, item_id: str) -> dict[str, Any]:
@@ -207,6 +222,12 @@ class MemoryPluggyClient:
         if account_id not in self.bills:
             raise PluggyError(400, "BILLS_NOT_AVAILABLE")
         return self.bills[account_id]
+
+    def list_loans(self, item_id: str) -> list[dict[str, Any]]:
+        return self.loans.get(item_id, [])
+
+    def list_investments(self, item_id: str) -> list[dict[str, Any]]:
+        return self.investments.get(item_id, [])
 
 
 def _int(value: str | None) -> int | None:
