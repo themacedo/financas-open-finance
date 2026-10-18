@@ -302,7 +302,7 @@ def fixed_cost_status(ledger: Ledger, cfg: Config, month: str, owner: str | None
                 gap = abs(math.log(-r["amount_cents"] / fc.valor_cents)) if fc.valor_cents else 0.0
                 candidatos.setdefault(r["local_id"], []).append((pos, gap, i))
                 valor_tx[r["local_id"]] = -r["amount_cents"]
-    # a debit matching two bills ("WELLHUB FULANA" vs the Anna installments) pays only one: the pattern that
+    # a debit matching two bills ("WELLHUB FULANA" vs installments paid to Fulana) pays only one: the pattern that
     # appears first in the description, then the bill whose value is closest
     pago = [0] * len(ativos)
     for lid, opcoes in candidatos.items():
