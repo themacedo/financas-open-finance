@@ -53,6 +53,8 @@ fi
 if "$UV" run --project "$PROJECT" --frozen --no-dev fin sync; then
   # 5. Painel: manda o painel.json novo para o repositório privado (falha só avisa).
   zsh "$PROJECT/scripts/publicar-painel.sh" || avisar "Financeiro" "Sync ok, mas o painel não foi atualizado."
+  # 6. Backup criptografado no Google Drive (falha só avisa; o sync já está salvo no cofre).
+  zsh "$PROJECT/scripts/backup-ledger.sh" || avisar "Financeiro" "Sync ok, mas o backup falhou. Veja ~/Library/Logs/fin/sync.err.log."
   avisar "Financeiro" "Sync de hoje concluído."
 else
   codigo=$?
