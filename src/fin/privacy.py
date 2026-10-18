@@ -82,7 +82,7 @@ def block_reason(text: str, extra_terms: Iterable[str] = ()) -> str | None:
             return name
     tokens = set(re.findall(r"[a-z]+", _ascii(text)))
     for term in extra_terms:
-        # each word of your terms blocks on its own ("joao souza" blocks "MACEDO" alone), accents ignored
+        # each word of your terms blocks on its own ("joao souza" blocks "SOUZA" alone), accents ignored
         words = [w for w in re.findall(r"[a-z]+", _ascii(term)) if len(w) >= 3]
         if any(w in tokens for w in words) or (_ascii(term).strip() and _ascii(term).strip() in _ascii(text)):
             return "term"
