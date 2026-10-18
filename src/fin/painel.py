@@ -105,7 +105,8 @@ def compute_financas(plano: dict[str, Any], contas: list[dict[str, Any]], gasto_
                           for d in depositos],
         },
         "compromissos": [{"descricao": c["descricao"], "mensal": _reais(_cents(c["mensal"])), "de": str(c["de"])[:7],
-                          "ate": str(c["ate"])[:7]} for c in plano.get("compromissos") or []],
+                          "ate": str(c["ate"])[:7], **({"fixo": str(c["fixo"])} if c.get("fixo") else {})}
+                         for c in plano.get("compromissos") or []],
         "diaADia": {"orcamento": _reais(orcamento), "gasto": _reais(gasto_dia_cents), "ate": _iso(dia.get("ate", ""))},
         "plano": [
             {"data": _iso(i["data"]), "descricao": i["descricao"], "status": status_of(i, today),
@@ -330,6 +331,15 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
     }
 
 
+def ligar_compromissos(f: dict[str, Any]) -> dict[str, Any]:
+    """A commitment linked to a fixed cost (`fixo`) takes this month's paid status from it, instead of guessing."""
+    pagos = {x["nome"]: x["pago"] for x in (f.get("detalhe") or {}).get("fixos", [])}
+    for c in f.get("compromissos", []):
+        if c.get("fixo") in pagos:
+            c["pagoNoMes"] = pagos[c["fixo"]]
+    return f
+
+
 def build_painel(ledger: Ledger, plano: dict[str, Any], today: date, now: datetime,
                  semanas_csv: Path | None = None, base: Path | None = None, cfg: "Config | None" = None) -> dict[str, Any]:
     contas = bank_accounts(ledger, plano.get("contas_nomes") or {})
@@ -343,8 +353,8 @@ def build_painel(ledger: Ledger, plano: dict[str, Any], today: date, now: dateti
         "atualizadoEm": now.isoformat(timespec="seconds"),
         "dono": plano.get("dono", ""),
         "empresas": load_empresas(plano, base or Path.cwd()),
-        "financas": {**compute_financas(plano, contas, gasto, today),
-                     **({"detalhe": compute_detalhe(ledger, cfg, plano, today)} if cfg else {})},
+        "financas": ligar_compromissos({**compute_financas(plano, contas, gasto, today),
+                                        **({"detalhe": compute_detalhe(ledger, cfg, plano, today)} if cfg else {})}),
         "desempenho": {
             "semanas": [{k: s[k] for k in curto} for s in historico[-N_SEMANAS:]],
             "historico": historico,

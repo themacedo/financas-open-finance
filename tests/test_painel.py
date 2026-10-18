@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from fin.ledger import Ledger
-from fin.painel import compute_financas, export_painel, _mes, build_painel, compute_clt, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
+from fin.painel import ligar_compromissos, compute_financas, export_painel, _mes, build_painel, compute_clt, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
 
 TODAY = date(2026, 10, 17)
 
@@ -160,3 +160,10 @@ def test_clt_month_splits_received_and_scheduled(tmp_path):
     assert [(i["descricao"], i["situacao"]) for i in c["itens"]] == [("Salário", "recebido"), ("Adiantamento", "previsto")]
     assert (c["recebido"], c["previsto"]) == (2958.5, 2014.89)
     ledger.close()
+
+
+def test_commitment_takes_paid_status_from_its_fixed_cost():
+    f = ligar_compromissos({"compromissos": [{"descricao": "A", "fixo": "Advogado"}, {"descricao": "B", "fixo": "Outro"},
+                                             {"descricao": "C"}],
+                            "detalhe": {"fixos": [{"nome": "Advogado", "pago": True}]}})
+    assert [c.get("pagoNoMes") for c in f["compromissos"]] == [True, None, None]
