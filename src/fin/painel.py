@@ -403,7 +403,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
     atual = date_range_totals(ledger, ini.isoformat(), today.isoformat(), "pf")
     antes = date_range_totals(ledger, ant.isoformat(), fim_ant.isoformat(), "pf")
     cheio = month_totals(ledger, ant.strftime("%Y-%m"), "pf")
-    cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: -atual["categorias"].get(c, 0))
+    cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: (-atual["categorias"].get(c, 0), c))
     pj = month_totals(ledger, ini.strftime("%Y-%m"), "pj")
     meses = [_mes(today, i).strftime("%Y-%m") for i in range(1, 13)]
     parcelas = committed_installments(ledger, meses)
@@ -644,7 +644,7 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
     for r in ledger.active_txs("date >= ? AND date <= ? AND amount_cents < 0 AND natureza='Despesa'", (ini.isoformat(), ate.isoformat())):
         if (r["categoria"] or "Revisar") not in PJ_OWN_CATS:
             por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
-    cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: -atual["categorias"].get(c, 0))
+    cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: (-atual["categorias"].get(c, 0), c))
     clt = compute_clt(ledger, ini, today, fim)
     # other income only: without the withdrawal (same money), the salary and the PJ billing that a
     # client paid straight into a PF account (already counted as PJ revenue)
@@ -724,8 +724,10 @@ def build_painel(ledger: Ledger, plano: dict[str, Any], today: date, now: dateti
                  semanas_csv: Path | None = None, base: Path | None = None, cfg: "Config | None" = None) -> dict[str, Any]:
     contas = bank_accounts(ledger, plano.get("contas_nomes") or {})
     gasto = day_to_day_spent(ledger, plano.get("dia_a_dia") or {}, today)
-    historico = load_historico(Path(plano.get("semanas_csv") or semanas_csv or SEMANAS_CSV).expanduser())
-    notas = load_notas(Path(plano.get("notas_json") or NOTAS_JSON).expanduser())
+    # a copy next to the ledger wins (the runner gets them from the Mac); else the Mac's own files
+    local = lambda nome, padrao: base / nome if base and (base / nome).exists() else Path(padrao).expanduser()
+    historico = load_historico(local(SEMANAS_CSV.name, plano.get("semanas_csv") or semanas_csv or SEMANAS_CSV))
+    notas = load_notas(local(NOTAS_JSON.name, plano.get("notas_json") or NOTAS_JSON))
     ultima_nota = notas[max(notas)] if notas else {}
     semana = plano.get("semana") or {}
     curto = ("rotulo", "commitsClt", "commitsPj", "entregasPj", "prsClt")
