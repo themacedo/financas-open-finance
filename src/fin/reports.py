@@ -356,7 +356,7 @@ def card_bills(ledger: Ledger, cfg: Config, today: date, months: int = 2, owner:
         # following bills. Summing our own rows misses lines the bank adds (rotativo carryover, financing).
         if acc["balance_cents"] and out and out[-months].account_id == acc["id"]:
             later = 0
-            for r in ledger.active_txs("account_id=? AND competence > ? AND COALESCE(rule,'') != 'card_bill_payment'",
+            for r in ledger.active_txs("account_id=? AND competence > ? AND COALESCE(rule,'') NOT IN ('card_bill_payment', 'card_payment_duplicate')",
                                        (acc["id"], first)):
                 later -= r["amount_cents"]
             later -= sum(p["amount_cents"] for p in ledger.q(

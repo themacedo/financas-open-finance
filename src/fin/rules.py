@@ -81,6 +81,9 @@ def _d(s: str) -> date:
     return date.fromisoformat(s[:10])
 
 
+CARD_PAYMENT_DUP = "card_payment_duplicate"
+
+
 def pair_id(a: int, b: int) -> str:
     lo, hi = sorted((a, b))
     return "P" + hashlib.sha256(f"{lo}-{hi}".encode()).hexdigest()[:10]
@@ -283,6 +286,14 @@ def apply_all(ledger: Ledger, cfg: Config, tax: Taxonomy, today: date | None = N
                                                 pair_id="B" + bp[2][:10])
         else:
             decisions[r["local_id"]] = Decision("Transferência", "Revisar", "variavel", rule="bill_payment_unpaired", review="pendente")
+
+    # 3b) the same card payment listed under two bills: an unpaired card-side copy of a paired payment (same card, date
+    # and amount) is the aggregator's duplicate; kept, but out of every balance
+    paired = {(c["account_id"], c["date"], c["amount_cents"]) for c in card_side if c["local_id"] in used_card}
+    for c in card_side:
+        if (c["local_id"] not in used_card and decisions[c["local_id"]].rule == "card_bill_payment"
+                and (c["account_id"], c["date"], c["amount_cents"]) in paired):
+            decisions[c["local_id"]] = Decision("Transferência", "Transferência", "variavel", rule=CARD_PAYMENT_DUP)
 
     # 4) people: Pix/TED to/from a CPF that is not yours, or transfer without counterpart data
     for r in rows:

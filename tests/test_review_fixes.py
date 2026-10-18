@@ -460,10 +460,33 @@ def test_dashboard_blocks_and_formulas(ledger, cfg, tax):
 
 
 def test_open_bill_anchored_to_bank_balance_when_higher(ledger, cfg, tax):
-    from fin.reports import card_bills
     data = {C: [tx("p1", C, "2026-10-02", 100.0, "LOJA X", card=True, ccm=FORECAST_NOV)]}
     _sync(ledger, data, cfg, tax)
     acc = ledger.one("SELECT id FROM accounts WHERE type='CREDIT'")["id"]
     ledger.x("UPDATE accounts SET balance_cents=900000 WHERE id=?", (acc,))  # bank: R$ 9.000 still owed
     bills = card_bills(ledger, cfg, date(2026, 10, 15))
     assert max(b.open_cents for b in bills) >= 800000
+
+
+def test_card_payment_listed_under_two_bills_counts_once(ledger, cfg, tax):
+    from fin.painel import posicao_em
+
+    data = {C: [tx("pay", C, "2026-10-08", -700.0, "Pagamento recebido", card=True, ccm=FORECAST_NOV),
+                tx("dup", C, "2026-10-08", -700.0, "Pagamento recebido", card=True, ccm=FORECAST_NOV),
+                tx("buy", C, "2026-10-09", 200.0, "LOJA X", card=True, ccm=FORECAST_NOV)],
+            I: [tx("bol", I, "2026-10-08", -700.0, "PAGTO FATURA CARTAO", op="BOLETO", method="BOLETO",
+                   receiver=party("EMISSOR", CNPJ_CARD, "999"))]}
+    _sync(ledger, data, cfg, tax)
+    rules = {_row(ledger, p)["rule"] for p in ("pay", "dup")}
+    assert rules == {"card_bill_payment", "card_payment_duplicate"}
+    # contas 6800 and card 1000 today; on 07/10 the bank had the 700 still and the card owed 1000 - 200 + 700
+    assert posicao_em(ledger, TODAY, TODAY) == {"contas": 6800.0, "cartao": 1000.0, "posicao": -(1000.0 - 6800.0)}
+    assert posicao_em(ledger, date(2026, 10, 7), TODAY) == {"contas": 7500.0, "cartao": 1500.0, "posicao": 6000.0}
+
+
+def test_two_real_payments_of_the_same_value_are_not_duplicates(ledger, cfg, tax):
+    pays = [tx(f"pay{k}", C, "2026-09-04", -150.0, "Pagamento recebido", card=True, ccm=FORECAST_NOV) for k in (1, 2)]
+    bols = [tx(f"bol{k}", I, "2026-09-04", -150.0, "PAGTO FATURA CARTAO", op="BOLETO", method="BOLETO",
+               receiver=party("EMISSOR", CNPJ_CARD, "999")) for k in (1, 2)]
+    _sync(ledger, {C: pays, I: bols}, cfg, tax)
+    assert {_row(ledger, p)["rule"] for p in ("pay1", "pay2")} == {"card_bill_payment"}

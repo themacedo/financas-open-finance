@@ -364,6 +364,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
         "periodos": compute_periodos(ledger, cfg, plano, today),
+        "posicaoMensal": posicao_mensal(ledger, today),
     }
 
 
@@ -382,6 +383,39 @@ def compute_cobertura(ledger: Ledger, ini: date, ate: date) -> dict[str, float]:
     juros = sum(-r["amount_cents"] for r in rows if "ROTATIVO" in (r["desc_norm"] or "").upper() + (r["description"] or "").upper()
                 and r["natureza"] == "Despesa")
     return {"rotativo": _reais(rot), "pixCredito": _reais(pix), "resgates": _reais(resg), "jurosRotativo": _reais(juros)}
+
+
+def posicao_em(ledger: Ledger, dia: date, today: date) -> dict[str, float]:
+    """Money in the bank accounts minus everything owed on the cards at the end of `dia`, rebuilt backwards from the
+    balances Pluggy reports today. Scheduled rows (a pending salary, future installments the card limit already
+    holds) stay out. A card payment the aggregator listed twice does not lower the debt twice."""
+    from fin.rules import CARD_PAYMENT_DUP
+
+    contas = cartao = 0
+    for a in ledger.accounts():
+        if a["type"] not in ("BANK", "CREDIT") or a["balance_cents"] is None:
+            continue
+        depois = ledger.one("SELECT COALESCE(SUM(amount_cents),0) s FROM transactions WHERE account_id=? AND date>? AND date<=? "
+                            "AND removed_upstream=0 AND COALESCE(rule,'')!=?",
+                            (a["id"], dia.isoformat(), today.isoformat(), CARD_PAYMENT_DUP))["s"] if dia < today else 0
+        if a["type"] == "BANK":
+            contas += a["balance_cents"] - depois
+        else:  # balance = used limit; purchases after `dia` are negative rows, payments positive
+            cartao += a["balance_cents"] + depois
+    return {"contas": _reais(contas), "cartao": _reais(cartao), "posicao": _reais(contas - cartao)}
+
+
+def posicao_mensal(ledger: Ledger, today: date, n: int = 12) -> list[dict[str, Any]]:
+    """End-of-month net position for the last n months with data, oldest first, plus today."""
+    primeiro = ledger.one("SELECT MIN(date) d FROM transactions")["d"]
+    inicio = date.fromisoformat(primeiro) if primeiro else today
+    out = []
+    for k in range(n, 0, -1):
+        fim = _mes(today, -k + 1) - timedelta(days=1)
+        if fim >= inicio:
+            out.append({"data": fim.isoformat(), "rotulo": MESES_ABREV[fim.month - 1], **posicao_em(ledger, fim, today)})
+    out.append({"data": today.isoformat(), "rotulo": "hoje", **posicao_em(ledger, today, today)})
+    return out
 
 
 def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: date, ant_ini: date, ant_fim: date,
@@ -411,6 +445,7 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
                                           - sum(v for f, v in atual["fontes"].items() if f in pj["fontes"]))),
                      "custosPj": _reais(sum(pj["categorias"].values()))},
         "cobertura": compute_cobertura(ledger, ini, ate),
+        "posicao": {"inicio": posicao_em(ledger, ini - timedelta(days=1), today), "fim": posicao_em(ledger, ate, today)},
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnterior": _reais(antes["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),
