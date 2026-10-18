@@ -82,7 +82,7 @@ def block_reason(text: str, extra_terms: Iterable[str] = ()) -> str | None:
             return name
     tokens = set(re.findall(r"[a-z]+", _ascii(text)))
     for term in extra_terms:
-        # each word of your terms blocks on its own ("joao souza" blocks "SOUZA" alone), accents ignored
+        # each word of your terms blocks on its own ("matheus macedo" blocks "MACEDO" alone), accents ignored
         words = [w for w in re.findall(r"[a-z]+", _ascii(term)) if len(w) >= 3]
         if any(w in tokens for w in words) or (_ascii(term).strip() and _ascii(term).strip() in _ascii(text)):
             return "term"
@@ -93,7 +93,7 @@ def block_reason(text: str, extra_terms: Iterable[str] = ()) -> str | None:
     m = LINKER_TRUNC.search(_ascii(text).upper())
     if m and any(sn.startswith(m.group(1).lower()) for sn in COMMON_SURNAMES):
         return "truncated_surname"
-    # names glued together by card acquirers: "FERNANDOLUIZV", "ANDRESSASILVADE"
+    # names glued together by card acquirers: "ROBERTOLUIZV", "JULIANASILVADE"
     for tok in tokens:
         if len(tok) >= 8 and any(tok.startswith(n) and len(tok) - len(n) >= 3 for n in GLUE_NAMES):
             return "glued_name"
