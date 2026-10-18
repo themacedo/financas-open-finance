@@ -365,6 +365,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
         "periodos": compute_periodos(ledger, cfg, plano, today),
         "posicaoSerie": posicao_serie(ledger, today),
+        "inicioDados": _inicio_dados(ledger),
     }
 
 
@@ -564,6 +565,8 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
     return {
         "inicio": ini.isoformat(), "fim": (fim - timedelta(days=1)).isoformat(), "ate": ate.isoformat(),
         "anteriorInicio": ant_ini.isoformat(), "anteriorAte": ant_ate.isoformat(), "emCurso": ate < fim - timedelta(days=1),
+        # the data starts mid-way (Open Finance history): a comparison with a period only partly covered is not one
+        "anteriorCompleto": bool(_inicio_dados(ledger)) and ant_ini.isoformat() >= (_inicio_dados(ledger) or ""),
         "entradas": {"clt": clt["recebido"], "pj": _reais(pj["receitas"]),
                      "outros": _reais(outros), "custosPj": _reais(custos_pj)},
         "cobertura": compute_cobertura(ledger, ini, ate),
