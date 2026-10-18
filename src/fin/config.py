@@ -168,7 +168,8 @@ def config_from_dict(raw: dict[str, Any], source: Path | None = None) -> Config:
     data_dir = Path(env_dir or raw.get("data_dir") or "").expanduser()
     if not str(data_dir) or str(data_dir) == ".":
         raise ConfigError("config: data_dir não definido")
-    mount = raw.get("require_mount")
+    # FIN_REQUIRE_MOUNT="" turns the vault check off where there is no vault (the runner decrypts into a temp dir)
+    mount = os.environ["FIN_REQUIRE_MOUNT"] if "FIN_REQUIRE_MOUNT" in os.environ else raw.get("require_mount")
     cards = {
         bank: CardConfig(
             issuer_cnpj="".join(ch for ch in str(c.get("issuer_cnpj") or "") if ch.isdigit()),

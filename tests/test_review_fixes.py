@@ -638,3 +638,32 @@ def test_a_review_only_rule_keeps_what_the_dictionary_decided(ledger, cfg, tax):
     kept, other = _row(ledger, "pix1"), _row(ledger, "pix2")
     assert (kept["categoria"], kept["cat_source"], kept["review_status"]) == ("Transporte", "dictionary", "auto")
     assert (other["categoria"], other["review_status"]) == ("Revisar", "pendente")  # still undecided: still flagged
+
+
+def test_runner_reads_secrets_from_env_and_skips_the_vault_check(monkeypatch, tmp_path):
+    from fin import secrets
+    from fin.config import config_from_dict
+
+    monkeypatch.setenv("FIN_SECRET_PLUGGY_CLIENT_ID", "id-do-ambiente")
+    assert secrets.get("pluggy_client_id") == "id-do-ambiente"  # the env wins: no Keychain on the runner
+    raw = {"data_dir": str(tmp_path), "require_mount": "/Volumes/CofreQueNaoExiste"}
+    monkeypatch.setenv("FIN_REQUIRE_MOUNT", "")
+    config_from_dict(raw).ensure_data_dir()  # does not refuse: there is no vault to mount
+    monkeypatch.delenv("FIN_REQUIRE_MOUNT")
+    with pytest.raises(Exception):
+        config_from_dict(raw).ensure_data_dir()  # on the Mac the check stays
+
+
+def test_sync_only_runs_when_a_bank_refreshed_after_the_last_one(ledger, cfg, tax):
+    from conftest import client as make_client
+    from fin.sync import ha_novidade
+
+    c = make_client({})
+    assert ha_novidade(ledger, c, cfg)[0]  # never synced
+    run_sync(ledger, c, cfg, tax, today=TODAY, now=NOW)
+    started = ledger.last_run()["started_at"]
+    for it in c.items.values():
+        it["lastUpdatedAt"] = "2000-01-01T00:00:00.000Z"
+    assert ha_novidade(ledger, c, cfg) == (False, f"nenhum banco atualizou desde {started}")
+    next(iter(c.items.values()))["lastUpdatedAt"] = "2999-01-01T00:00:00.000Z"
+    assert ha_novidade(ledger, c, cfg)[0]

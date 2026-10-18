@@ -283,6 +283,24 @@ def upsert_account_transactions(ledger: Ledger, account: Any, incoming: list[dic
     return stats
 
 
+def ha_novidade(ledger: Ledger, client: PluggyAPI, cfg: Config) -> tuple[bool, str]:
+    """Whether any bank refreshed in Pluggy after the last successful sync started (cheap: one get_item per bank).
+    No successful sync yet, or a bank that cannot be read: yes, so the sync runs and reports it."""
+    last = ledger.one("SELECT started_at FROM sync_runs WHERE status IN ('success','partial') ORDER BY id DESC LIMIT 1")
+    if not last:
+        return True, "nenhum sync anterior"
+    desde = datetime.fromisoformat(str(last["started_at"]).replace("Z", "+00:00"))
+    for it in cfg.items:
+        try:
+            item = client.get_item(it["item_id"])
+        except (PluggyError, httpx.TransportError):
+            return True, f"{it['bank']}: não consegui ler o item"
+        quando = item.get("lastUpdatedAt")
+        if quando and datetime.fromisoformat(str(quando).replace("Z", "+00:00")) > desde:
+            return True, f"{it['bank']} atualizou em {quando}"
+    return False, f"nenhum banco atualizou desde {last['started_at']}"
+
+
 def check_item(item: dict[str, Any], label: str, now: datetime, stale_hours: int) -> list[str]:
     alerts = []
     status = item.get("status")

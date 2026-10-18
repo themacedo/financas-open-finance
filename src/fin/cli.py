@@ -193,6 +193,13 @@ def cmd_sync(args) -> int:
     watchdog = _watchdog(SYNC_TIMEOUT_S)
     ledger = Ledger(cfg.db_path)
     try:
+        if args.se_houver_novidade:
+            from fin.sync import ha_novidade
+
+            novo, motivo = ha_novidade(ledger, _pluggy_client(), cfg)
+            print(f"novidade no Pluggy: {'sim' if novo else 'não'} ({motivo})")
+            if not novo:
+                return 0
         return _sync(args, cfg, tax, ledger)
     except Exception as exc:
         log.error("sync falhou: %s", type(exc).__name__)
@@ -487,6 +494,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-categorize", action="store_true")
     s.add_argument("--no-publish", action="store_true")
     s.add_argument("--no-notify", action="store_true")
+    s.add_argument("--se-houver-novidade", action="store_true",
+                   help="só sincroniza se algum banco atualizou no Pluggy depois do último sync")
     s.set_defaults(fn=cmd_sync)
 
     s = sub.add_parser("categorize", help="dicionário -> cache -> LLM para o que faltar")

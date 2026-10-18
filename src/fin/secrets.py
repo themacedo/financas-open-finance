@@ -1,12 +1,14 @@
 """Secrets in the macOS Keychain (via keyring). Never printed, never logged, never in files.
 
 Service "fin"; accounts listed in NAMES. `fin setup` asks with getpass (no echo).
+Where there is no Keychain (the GitHub Actions runner), FIN_SECRET_<NAME> in the environment takes its place.
 """
 
 from __future__ import annotations
 
 import getpass
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -37,6 +39,8 @@ class SecretMissing(RuntimeError):
 def get(name: str) -> str | None:
     if name not in NAMES:
         raise KeyError(name)
+    if env := os.environ.get(f"FIN_SECRET_{name.upper()}"):
+        return env
     try:
         return keyring.get_password(SERVICE, name)
     except keyring.errors.KeyringError as exc:  # locked, access denied, PasswordGetError...
