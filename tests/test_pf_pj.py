@@ -356,3 +356,29 @@ def test_bill_outside_its_months_is_not_listed_and_one_debit_pays_one_bill(tmp_p
     assert "Parcela" not in _status(ledger, cfg, "2026-10") and "Passagem" not in _status(ledger, cfg, "2027-01")
     # the gym debit goes to the gym (pattern first in the description); the R$ 166 Pix to the installment (closest value)
     assert _status(ledger, cfg, "2026-11") == {"Academia": True, "Parcela": True, "Passagem": False}
+
+
+def test_periods_weeks_months_years_and_same_days_comparison(tmp_path, ledger, tax):
+    """Selector of the dashboard: TODAY is Thursday 15/10/2026. The week starts on Monday 12/10; a running period
+    is compared with the same number of days of the previous one."""
+    from fin.painel import compute_periodos
+
+    cfg = pj_cfg(tmp_path)
+    compra = lambda pid, d, v: tx(pid, I, d, -v, "COMPRA DEBITO LOJA EXEMPLO")
+    data = {I: [compra("a", "2026-10-12", 100.0),   # this week (Mon)
+                compra("b", "2026-10-11", 40.0),    # last week (Sun)
+                compra("c", "2026-10-07", 30.0),    # last week (Wed): inside the "same days" cut (Mon-Thu)
+                compra("d", "2026-10-09", 25.0),    # last week (Fri): outside the cut
+                compra("e", "2026-09-10", 70.0),    # September, inside the first 15 days
+                compra("f", "2026-09-20", 500.0)]}  # September, after the 15th
+    run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
+    p = compute_periodos(ledger, cfg, {}, TODAY)
+    sem, mes, ano = p["semana"][0], p["mes"][0], p["ano"][0]
+    assert (sem["inicio"], sem["fim"], sem["ate"], sem["emCurso"]) == ("2026-10-12", "2026-10-18", "2026-10-15", True)
+    assert sem["resumo"]["despesas"] == 100 and sem["resumo"]["despesasAnterior"] == 30  # Mon-Thu of last week only
+    anterior = p["semana"][1]
+    assert anterior["inicio"] == "2026-10-05" and anterior["resumo"]["despesas"] == 95 and anterior["emCurso"] is False
+    assert (mes["chave"], mes["rotulo"], mes["resumo"]["despesas"], mes["resumo"]["despesasAnterior"]) == ("m-2026-10", "out/26", 195, 70)
+    assert p["mes"][1]["resumo"]["despesas"] == 570 and p["mes"][1]["emCurso"] is False
+    assert ano["chave"] == "a-2026" and ano["resumo"]["despesas"] == 765
+    assert "fixos" in mes and "fixos" not in sem

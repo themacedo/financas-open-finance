@@ -15,7 +15,7 @@ import json
 import mimetypes
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -252,9 +252,10 @@ def _top(rows: list[Any], n: int = 3, apelidos: dict[str, str] | None = None) ->
     return [{"nome": k, "valor": _reais(v[0]), "n": v[1]} for k, v in top]
 
 
-def compute_clt(ledger: Ledger, ini: date, today: date) -> dict[str, Any]:
-    """Salary entries of the month (category Salário CLT): what arrived and what is scheduled (pending or future)."""
-    fim = _mes(ini, 1)
+def compute_clt(ledger: Ledger, ini: date, today: date, fim: date | None = None) -> dict[str, Any]:
+    """Salary entries of the period (category Salário CLT, end exclusive; default: the month of `ini`):
+    what arrived and what is scheduled (pending or future)."""
+    fim = fim or _mes(ini, 1)
     itens = []
     for r in ledger.active_txs("categoria='Salário CLT' AND amount_cents > 0 AND date >= ? AND date < ?",
                                (ini.isoformat(), fim.isoformat())):
@@ -328,7 +329,78 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
         "clt": clt,
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
+        "periodos": compute_periodos(ledger, cfg, plano, today),
     }
+
+
+MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: date, ant_ini: date, ant_fim: date,
+                    today: date) -> dict[str, Any]:
+    """Spending by category, income by source, CLT and PJ for [ini, fim) against [ant_ini, ant_fim).
+    A period still running is cut at today, and so is the comparison (same number of days)."""
+    from fin.reports import PJ_OWN_CATS, date_range_totals
+
+    ate = min(fim - timedelta(days=1), today)
+    ant_ate = min(ant_fim - timedelta(days=1), ant_ini + (ate - ini))
+    atual = date_range_totals(ledger, ini.isoformat(), ate.isoformat(), "pf")
+    antes = date_range_totals(ledger, ant_ini.isoformat(), ant_ate.isoformat(), "pf")
+    pj = date_range_totals(ledger, ini.isoformat(), ate.isoformat(), "pj")
+    por_cat: dict[str, list[Any]] = {}
+    for r in ledger.active_txs("date >= ? AND date <= ? AND amount_cents < 0 AND natureza='Despesa'", (ini.isoformat(), ate.isoformat())):
+        if (r["categoria"] or "Revisar") not in PJ_OWN_CATS:
+            por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
+    cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: -atual["categorias"].get(c, 0))
+    clt = compute_clt(ledger, ini, today, fim)
+    return {
+        "inicio": ini.isoformat(), "fim": (fim - timedelta(days=1)).isoformat(), "ate": ate.isoformat(),
+        "anteriorInicio": ant_ini.isoformat(), "anteriorAte": ant_ate.isoformat(), "emCurso": ate < fim - timedelta(days=1),
+        "entradas": {"clt": clt["recebido"], "pj": _reais(pj["receitas"]),
+                     "outros": _reais(max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"]))),
+                     "custosPj": _reais(sum(pj["categorias"].values()))},
+        "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
+                   "despesasAnterior": _reais(antes["despesas"])},
+        "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),
+                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas),
+                        "bruto": _reais(-sum(r["amount_cents"] for r in por_cat.get(c, [])))} for c in cats],
+        "clt": clt,
+        "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
+               "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
+    }
+
+
+def compute_periodos(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date,
+                     n_semanas: int = 12, n_meses: int = 12) -> dict[str, list[dict[str, Any]]]:
+    """Every period the selector offers, newest first: weeks (Monday to Sunday), months and years with data."""
+    from fin.reports import fixed_cost_status
+
+    pessoas = {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()}
+    nomes_fixos = plano.get("fixos_nomes") or {}
+    primeiro = ledger.one("SELECT MIN(date) d FROM transactions")["d"]
+    inicio_dados = date.fromisoformat(primeiro) if primeiro else today
+    semanas, meses, anos = [], [], []
+    seg = today - timedelta(days=today.weekday())
+    for k in range(n_semanas):
+        ini = seg - timedelta(weeks=k)
+        if ini + timedelta(days=6) < inicio_dados:
+            break
+        p = compute_periodo(ledger, pessoas, ini, ini + timedelta(days=7), ini - timedelta(days=7), ini, today)
+        fimv = ini + timedelta(days=6)
+        semanas.append({"chave": f"s-{ini.isoformat()}", "rotulo": f"{ini:%d/%m} a {fimv:%d/%m}", **p})
+    for k in range(n_meses):
+        ini = _mes(today, -k)
+        if _mes(ini, 1) <= inicio_dados:
+            break
+        p = compute_periodo(ledger, pessoas, ini, _mes(ini, 1), _mes(ini, -1), ini, today)
+        fixos = [{"nome": nome_fixo(n, nomes_fixos), "valor": _reais(v), "dia": d, "pago": pago}
+                 for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))]
+        meses.append({"chave": f"m-{ini:%Y-%m}", "rotulo": f"{MESES_ABREV[ini.month - 1]}/{ini:%y}", "fixos": fixos, **p})
+    for ano in range(today.year, inicio_dados.year - 1, -1):
+        ini = date(ano, 1, 1)
+        p = compute_periodo(ledger, pessoas, ini, date(ano + 1, 1, 1), date(ano - 1, 1, 1), ini, today)
+        anos.append({"chave": f"a-{ano}", "rotulo": str(ano), **p})
+    return {"semana": semanas, "mes": meses, "ano": anos}
 
 
 def ligar_compromissos(f: dict[str, Any]) -> dict[str, Any]:
