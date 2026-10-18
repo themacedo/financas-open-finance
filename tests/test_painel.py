@@ -137,7 +137,7 @@ def test_spending_label_hides_people_and_keeps_merchants():
     assert rotulo_gasto(row("Amazon 6/7")) == "Amazon"  # installment suffix out
     assert rotulo_gasto(row("Compra débito Wellhub Jose Carlos", "WELLHUB JOSE CARLOS")) == "Wellhub"  # brand kept, name cut
     assert rotulo_gasto(row("MP *BARBEARIA", "MP BARBEARIA")) == "Pessoa física (nome oculto)"  # prefix too short
-    assert rotulo_gasto(row("Compra débito Wellhub Anna Paula F", "WELLHUB ANNA PAULA F")) == "Wellhub"  # "Anna" escapes the detector
+    assert rotulo_gasto(row("Compra débito Wellhub Anna Souza", "WELLHUB ANNA SOUZA")) == "Wellhub"  # "Anna" escapes, "Souza" does not
     assert rotulo_gasto(row("Compra|EDUARDODEMORAES")) == "Pessoa física (nome oculto)"  # glued name
     assert rotulo_gasto(row("Transferência enviada pelo Pix|EMPRESA XYZ", kind="person")) == "Pessoa física (nome oculto)"
     assert rotulo_gasto(row("TRANSFERENCIA ENVIADA PELO PIX")) == "Pix ou transferência"
