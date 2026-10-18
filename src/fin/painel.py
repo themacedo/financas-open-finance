@@ -312,17 +312,22 @@ def _chave_recorrente(r: Any) -> str:
 
 
 def cobrancas_recorrentes(ledger: Ledger, account_id: str, comp: str, apelidos: dict[str, str] | None = None,
-                          termos: list[str] | None = None) -> list[dict[str, Any]]:
+                          termos: list[str] | None = None, hoje: date | None = None) -> list[dict[str, Any]]:
     """Monthly charges on the card (subscriptions, a coffee club): one-off purchases in at least 2 of the last 3
-    bills, either filed as Assinaturas or once per bill with a steady amount. Expected value: the latest one."""
+    bills and seen in the last 40 days, either filed as Assinaturas or once per bill with a steady amount (a delivery
+    order of about the same value now and then is not one). Expected value: the latest one."""
     from fin.rules import add_months
 
     ultimas = [add_months(comp, -k) for k in (1, 2, 3)]
     por: dict[str, dict[str, list[Any]]] = {}
-    for r in ledger.active_txs(f"account_id=? AND competence IN ({','.join('?' * len(ultimas))}) AND amount_cents < 0 "
+    recente: dict[str, str] = {}  # latest date, the open bill included (a charge there proves it is still running)
+    for r in ledger.active_txs(f"account_id=? AND competence IN ({','.join('?' * (len(ultimas) + 1))}) AND amount_cents < 0 "
                                "AND COALESCE(natureza,'Despesa')='Despesa' AND COALESCE(total_installments,0) <= 1",
-                               (account_id, *ultimas)):
-        por.setdefault(_chave_recorrente(r), {}).setdefault(r["competence"], []).append(r)
+                               (account_id, *ultimas, comp)):
+        k = _chave_recorrente(r)
+        recente[k] = max(recente.get(k, ""), r["date"])
+        if r["competence"] != comp:
+            por.setdefault(k, {}).setdefault(r["competence"], []).append(r)
     out = []
     for chave, meses in por.items():
         if not chave or len(meses) < 2:
@@ -334,6 +339,8 @@ def cobrancas_recorrentes(ledger: Ledger, account_id: str, comp: str, apelidos: 
         if not (assinatura or estavel) or any(r["categoria"] in ("Impostos/Taxas", "Outros") and "JUROS" in chave for r in todas):
             continue
         ultima = max(todas, key=lambda r: r["date"])
+        if hoje and recente[chave] < (hoje - timedelta(days=40)).isoformat():  # stopped: nothing in the last 40 days
+            continue
         out.append({"chave": chave, "nome": rotulo_gasto(ultima, apelidos, termos), "valor": _reais(-ultima["amount_cents"]),
                     "dia": int(ultima["date"][8:10])})
     return sorted(out, key=lambda x: -x["valor"])
@@ -361,7 +368,7 @@ def compute_ciclo_cartao(ledger: Ledger, cfg: "Config", plano: dict[str, Any], t
     comprometido = -sum(r["amount_cents"] for r in rows if ja(r))
     novo = -sum(r["amount_cents"] for r in rows if not ja(r))
     recorrentes = cobrancas_recorrentes(ledger, acc["id"], comp, {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()},
-                                        termos_privados(ledger, plano))
+                                        termos_privados(ledger, plano), today)
     abertas = {_chave_recorrente(r) for r in rows}
     previstas = [x for x in recorrentes if x["chave"] not in abertas]
     reservado = sum(_cents(x["valor"]) for x in previstas)

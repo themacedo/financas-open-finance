@@ -612,3 +612,14 @@ def test_card_cycle_reserves_the_monthly_charges_still_to_come(ledger, cfg, tax)
     assert (c["atual"], c["reservado"]) == (39.9, 149.9)
     assert c["porDia"] == 3.93  # (300 - 39.90 - 149.90) / 28 days, rounded down
     assert c["status"] == "ok"
+
+
+def test_a_charge_that_stopped_is_not_reserved(ledger, cfg, tax):
+    from fin.config import CardConfig
+    from fin.painel import compute_ciclo_cartao
+
+    cfg.cards["nubank"] = CardConfig(closing_day=17, due_day=24)
+    sub = lambda tid, day, comp: tx(tid, C, day, 45.9, "DELIVERY APP", card=True, ccm={"billForecastDate": comp})
+    _sync(ledger, {C: [sub("d7", "2026-07-19", "2026-08"), sub("d8", "2026-08-23", "2026-09")]}, cfg, tax, today=date(2026, 10, 20))
+    plano = {"plano": [{"data": "2026-11-24", "descricao": "Fatura do cartão", "sai": 300}]}
+    assert compute_ciclo_cartao(ledger, cfg, plano, date(2026, 10, 20))["previstas"] == []  # last one 58 days ago
