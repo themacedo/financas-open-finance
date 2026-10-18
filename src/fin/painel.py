@@ -213,6 +213,34 @@ def nome_fixo(nome: str, apelidos: dict[str, str]) -> str:
     return apelidos.get(nome) or re.sub(r"\s*\(.*$", "", nome).strip()
 
 
+PARCELA = re.compile(r"\s*\d{1,2}/\d{1,2}\s*$")
+PIX_PREFIXO = re.compile(r"^(TRANSFERENCIA|TRANSFERÊNCIA|PIX)\b.*", re.I)
+
+
+def rotulo_gasto(row: Any) -> str:
+    """Where the money went, safe to show: the merchant, or "Pessoa física" when it reads like a person's name."""
+    from fin.privacy import block_reason
+
+    desc = row["description"] or ""
+    base = desc.split("|", 1)[1] if "|" in desc else (row["desc_norm"] or desc)
+    base = PARCELA.sub("", base).strip()
+    if PIX_PREFIXO.match(base):
+        base = ""
+    if row["counterpart_kind"] == "person" or not base or block_reason(base):
+        return "Pessoa física (nome oculto)" if base or row["counterpart_kind"] == "person" else "Pix ou transferência"
+    return " ".join(w.capitalize() if len(w) > 2 else w.lower() for w in base.split())
+
+
+def _top(rows: list[Any], n: int = 3) -> list[dict[str, Any]]:
+    por: dict[str, list[int]] = {}
+    for r in rows:
+        v = por.setdefault(rotulo_gasto(r), [0, 0])
+        v[0] += -r["amount_cents"]
+        v[1] += 1
+    top = sorted(por.items(), key=lambda kv: -kv[1][0])[:n]
+    return [{"nome": k, "valor": _reais(v[0]), "n": v[1]} for k, v in top]
+
+
 def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any]:
     """Month by category against the same days of last month, fixed costs, future installments and the PJ."""
     from fin.reports import committed_installments, date_range_totals, fixed_cost_status, month_totals
@@ -226,6 +254,25 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
     pj = month_totals(ledger, ini.strftime("%Y-%m"), "pj")
     meses = [_mes(today, i).strftime("%Y-%m") for i in range(1, 13)]
     parcelas = committed_installments(ledger, meses)
+    # detail for the hover cards: what is inside each category and each month of installments
+    from fin.reports import PJ_OWN_CATS
+
+    gastos = [r for r in ledger.active_txs("date >= ? AND date <= ? AND amount_cents < 0 AND natureza='Despesa'",
+                                           (ini.isoformat(), today.isoformat()))
+              if (r["categoria"] or "Revisar") not in PJ_OWN_CATS]
+    por_cat: dict[str, list[Any]] = {}
+    for r in gastos:
+        por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
+    itens_mes: dict[str, list[dict[str, Any]]] = {m: [] for m in meses}
+    for r in ledger.active_txs("total_installments > 1 AND COALESCE(natureza,'Despesa')='Despesa'"):
+        if r["competence"] in itens_mes:
+            itens_mes[r["competence"]].append({"nome": rotulo_gasto(r), "parcela": f"{r['installment_number']}/{r['total_installments']}",
+                                               "valor": _reais(-r["amount_cents"]), "categoria": r["categoria"] or "Revisar"})
+    for pr in ledger.q("SELECT month, desc_norm, installment_number, total_installments, amount_cents, categoria FROM installments_projection"):
+        if pr["month"] in itens_mes:
+            fake = {"description": pr["desc_norm"], "desc_norm": pr["desc_norm"], "counterpart_kind": None}
+            itens_mes[pr["month"]].append({"nome": rotulo_gasto(fake), "parcela": f"{pr['installment_number']}/{pr['total_installments']}",
+                                           "valor": _reais(-pr["amount_cents"]), "categoria": pr["categoria"] or "Revisar"})
     apelidos = plano.get("fixos_nomes") or {}
     return {
         "mes": ini.strftime("%Y-%m"), "ate": today.isoformat(), "anteriorAte": fim_ant.isoformat(),
@@ -233,10 +280,13 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                    "despesasAnteriorMesmoPeriodo": _reais(antes["despesas"]),
                    "despesasAnteriorMesCheio": _reais(cheio["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)),
-                        "anterior": _reais(antes["categorias"].get(c, 0))} for c in cats],
+                        "anterior": _reais(antes["categorias"].get(c, 0)),
+                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, [])),
+                        "bruto": _reais(-sum(r["amount_cents"] for r in por_cat.get(c, [])))} for c in cats],
         "fixos": [{"nome": nome_fixo(n, apelidos), "valor": _reais(v), "dia": d, "pago": pago}
                   for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))],
-        "parcelas": [{"mes": m, "valor": _reais(parcelas[m])} for m in meses],
+        "parcelas": [{"mes": m, "valor": _reais(parcelas[m]),
+                      "itens": sorted(itens_mes[m], key=lambda i: -i["valor"])} for m in meses],
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
     }

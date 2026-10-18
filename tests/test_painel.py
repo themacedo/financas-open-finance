@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from fin.ledger import Ledger
-from fin.painel import compute_financas, export_painel, _mes, build_painel, compute_detalhe, fora_pct, nome_fixo, load_empresas, load_historico, status_of
+from fin.painel import compute_financas, export_painel, _mes, build_painel, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
 
 TODAY = date(2026, 10, 17)
 
@@ -127,3 +127,13 @@ def test_month_shift_and_same_period_of_last_month(tmp_path):
     assert (d["mes"], d["ate"], d["anteriorAte"]) == ("2026-03", "2026-03-31", "2026-02-28")  # Feb has no 31
     assert [p["mes"] for p in d["parcelas"]][:2] == ["2026-04", "2026-05"] and len(d["parcelas"]) == 12
     ledger.close()
+
+
+def test_spending_label_hides_people_and_keeps_merchants():
+    row = lambda desc, norm=None, kind=None: {"description": desc, "desc_norm": norm or desc, "counterpart_kind": kind}
+    assert rotulo_gasto(row("Compra no débito|TOCA DO TATU")) == "Toca do Tatu"
+    assert rotulo_gasto(row("Amazon 6/7")) == "Amazon"  # installment suffix out
+    assert rotulo_gasto(row("WELLHUB FULANO DA SILVA", "WELLHUB JOSE CARLOS")) == "Pessoa física (nome oculto)"
+    assert rotulo_gasto(row("Compra|EDUARDODEMORAES")) == "Pessoa física (nome oculto)"  # glued name
+    assert rotulo_gasto(row("Transferência enviada pelo Pix|EMPRESA XYZ", kind="person")) == "Pessoa física (nome oculto)"
+    assert rotulo_gasto(row("TRANSFERENCIA ENVIADA PELO PIX")) == "Pix ou transferência"
