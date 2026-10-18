@@ -554,3 +554,19 @@ def test_loan_investment_and_installments_enter_the_position(ledger, cfg, tax):
     assert resultado == -100.0  # only the first installment is September spending
     assert (a["parcelado"], a["emprestimos"], a["aplicacoes"], a["naoExplicado"]) == (-200.0, 0.0, 0.0, 0.0)
     assert round(p["posicao"]["fim"]["posicao"] - p["posicao"]["inicio"]["posicao"], 2) == -300.0
+
+
+def test_automatic_sweep_balance_comes_from_the_rows(ledger, cfg, tax):
+    from fin.painel import posicao_em
+
+    for it in cfg.items:
+        if it["bank"] == "itau":
+            it["aplicacao_automatica"] = "true"
+    data = {I: [tx("a1", I, "2026-10-02", -2500.0, "Aplicação APL APLIC AUT MAIS"),
+                tx("r1", I, "2026-10-08", 2400.0, "Resgate RES APLIC AUT MAIS")]}
+    _sync(ledger, data, cfg, tax)
+    assert posicao_em(ledger, date(2026, 10, 1), TODAY)["investimentos"] == 0.0
+    assert posicao_em(ledger, date(2026, 10, 5), TODAY)["investimentos"] == 2500.0  # applied, still yours
+    assert posicao_em(ledger, TODAY, TODAY)["investimentos"] == 100.0
+    # the money going in and out of the sweep does not move the position
+    assert posicao_em(ledger, date(2026, 10, 5), TODAY)["posicao"] == posicao_em(ledger, date(2026, 10, 1), TODAY)["posicao"]

@@ -462,5 +462,17 @@ def _sync_body(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, to
     # 3) deterministic rules + installment projection
     for k, v in apply_all(ledger, cfg, tax, today=today).items():
         result.stats[k] += v
+
+    # 3b) automatic sweep investments the bank does not report (Itaú "APLIC AUT"): the balance is what went in minus
+    # what came back, from the account's first row (`aplicacao_automatica: true` only for an account whose whole
+    # history is in the ledger)
+    for it in cfg.items:
+        if str(it.get("aplicacao_automatica", "")).lower() in ("true", "1", "sim", "yes"):
+            saldo = -ledger.one("SELECT COALESCE(SUM(t.amount_cents),0) s FROM transactions t JOIN accounts a ON a.id=t.account_id "
+                                "WHERE a.item_id=? AND t.natureza='Investimento' AND t.removed_upstream=0 AND t.date<=?",
+                                (it["item_id"], today.isoformat()))["s"]
+            upsert_investments(ledger, it["item_id"], [{"id": f"auto:{it['item_id']}", "type": "AUTOMATICA",
+                                                        "name": "Aplicação automática", "balance": max(0, saldo) / 100,
+                                                        "status": "ACTIVE"}], it["item_id"])
     if not accounts and cfg.items:
         result.status = "error"
