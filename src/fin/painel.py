@@ -241,6 +241,24 @@ def _top(rows: list[Any], n: int = 3) -> list[dict[str, Any]]:
     return [{"nome": k, "valor": _reais(v[0]), "n": v[1]} for k, v in top]
 
 
+def compute_clt(ledger: Ledger, ini: date, today: date) -> dict[str, Any]:
+    """Salary entries of the month (category Salário CLT): what arrived and what is scheduled (pending or future)."""
+    fim = _mes(ini, 1)
+    itens = []
+    for r in ledger.active_txs("categoria='Salário CLT' AND amount_cents > 0 AND date >= ? AND date < ?",
+                               (ini.isoformat(), fim.isoformat())):
+        d = (r["description"] or "").lower()
+        # the description says it most of the time; a scheduled entry ("Entrada PAGTO") is named by the day:
+        # salary comes around the 5th, the advance around the 20th
+        nome = "Adiantamento" if "adiant" in d else "Salário" if "sal" in d else ("Salário" if int(r["date"][8:]) <= 12 else "Adiantamento")
+        recebido = r["status"] != "PENDING" and r["date"] <= today.isoformat()
+        itens.append({"data": r["date"], "descricao": nome, "valor": _reais(r["amount_cents"]),
+                      "situacao": "recebido" if recebido else "previsto"})
+    itens.sort(key=lambda i: i["data"])
+    soma = lambda s: _reais(sum(_cents(i["valor"]) for i in itens if i["situacao"] == s))
+    return {"itens": itens, "recebido": soma("recebido"), "previsto": soma("previsto")}
+
+
 def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any]:
     """Month by category against the same days of last month, fixed costs, future installments and the PJ."""
     from fin.reports import committed_installments, date_range_totals, fixed_cost_status, month_totals
@@ -274,8 +292,15 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
             itens_mes[pr["month"]].append({"nome": rotulo_gasto(fake), "parcela": f"{pr['installment_number']}/{pr['total_installments']}",
                                            "valor": _reais(-pr["amount_cents"]), "categoria": pr["categoria"] or "Revisar"})
     apelidos = plano.get("fixos_nomes") or {}
+    clt = compute_clt(ledger, ini, today)
     return {
         "mes": ini.strftime("%Y-%m"), "ate": today.isoformat(), "anteriorAte": fim_ant.isoformat(),
+        "entradas": {  # what actually came in, by source; a PJ -> PF withdrawal is the same money moving, not income
+            "clt": clt["recebido"],
+            "pj": _reais(pj["receitas"]),
+            "outros": _reais(max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"]))),
+            "custosPj": _reais(sum(pj["categorias"].values())),
+        },
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnteriorMesmoPeriodo": _reais(antes["despesas"]),
                    "despesasAnteriorMesCheio": _reais(cheio["despesas"])},
@@ -287,6 +312,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                   for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))],
         "parcelas": [{"mes": m, "valor": _reais(parcelas[m]),
                       "itens": sorted(itens_mes[m], key=lambda i: -i["valor"])} for m in meses],
+        "clt": clt,
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
     }

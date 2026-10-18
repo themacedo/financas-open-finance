@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from fin.ledger import Ledger
-from fin.painel import compute_financas, export_painel, _mes, build_painel, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
+from fin.painel import compute_financas, export_painel, _mes, build_painel, compute_clt, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
 
 TODAY = date(2026, 10, 17)
 
@@ -126,6 +126,7 @@ def test_month_shift_and_same_period_of_last_month(tmp_path):
     d = compute_detalhe(ledger, cfg, {}, date(2026, 3, 31))
     assert (d["mes"], d["ate"], d["anteriorAte"]) == ("2026-03", "2026-03-31", "2026-02-28")  # Feb has no 31
     assert [p["mes"] for p in d["parcelas"]][:2] == ["2026-04", "2026-05"] and len(d["parcelas"]) == 12
+    assert d["entradas"] == {"clt": 0, "pj": 0, "outros": 0, "custosPj": 0} and d["clt"]["itens"] == []
     ledger.close()
 
 
@@ -137,3 +138,17 @@ def test_spending_label_hides_people_and_keeps_merchants():
     assert rotulo_gasto(row("Compra|EDUARDODEMORAES")) == "Pessoa física (nome oculto)"  # glued name
     assert rotulo_gasto(row("Transferência enviada pelo Pix|EMPRESA XYZ", kind="person")) == "Pessoa física (nome oculto)"
     assert rotulo_gasto(row("TRANSFERENCIA ENVIADA PELO PIX")) == "Pix ou transferência"
+
+
+def test_clt_month_splits_received_and_scheduled(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    rows = []
+    class L:  # minimal stand-in: compute_clt only reads active_txs
+        def active_txs(self, where, params):
+            return rows
+    rows += [{"description": "Entrada PAGTO Salários", "date": "2026-10-03", "status": "POSTED", "amount_cents": 295850},
+             {"description": "Entrada PAGTO", "date": "2026-10-20", "status": "PENDING", "amount_cents": 201489}]  # named by the day
+    c = compute_clt(L(), date(2026, 10, 1), date(2026, 10, 18))
+    assert [(i["descricao"], i["situacao"]) for i in c["itens"]] == [("Salário", "recebido"), ("Adiantamento", "previsto")]
+    assert (c["recebido"], c["previsto"]) == (2958.5, 2014.89)
+    ledger.close()
