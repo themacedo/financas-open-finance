@@ -307,6 +307,38 @@ def compute_clt(ledger: Ledger, ini: date, today: date, fim: date | None = None)
 RE_FATURA_PLANO = re.compile(r"fatura|cart[aã]o", re.I)
 
 
+def _chave_recorrente(r: Any) -> str:
+    return " ".join((r["desc_norm"] or "").split()[:2])
+
+
+def cobrancas_recorrentes(ledger: Ledger, account_id: str, comp: str, apelidos: dict[str, str] | None = None,
+                          termos: list[str] | None = None) -> list[dict[str, Any]]:
+    """Monthly charges on the card (subscriptions, a coffee club): one-off purchases in at least 2 of the last 3
+    bills, either filed as Assinaturas or once per bill with a steady amount. Expected value: the latest one."""
+    from fin.rules import add_months
+
+    ultimas = [add_months(comp, -k) for k in (1, 2, 3)]
+    por: dict[str, dict[str, list[Any]]] = {}
+    for r in ledger.active_txs(f"account_id=? AND competence IN ({','.join('?' * len(ultimas))}) AND amount_cents < 0 "
+                               "AND COALESCE(natureza,'Despesa')='Despesa' AND COALESCE(total_installments,0) <= 1",
+                               (account_id, *ultimas)):
+        por.setdefault(_chave_recorrente(r), {}).setdefault(r["competence"], []).append(r)
+    out = []
+    for chave, meses in por.items():
+        if not chave or len(meses) < 2:
+            continue
+        todas = [r for rs in meses.values() for r in rs]
+        valores = [-r["amount_cents"] for r in todas]
+        assinatura = any(r["categoria"] == "Assinaturas" for r in todas)
+        estavel = all(len(rs) == 1 for rs in meses.values()) and max(valores) <= min(valores) * 1.15
+        if not (assinatura or estavel) or any(r["categoria"] in ("Impostos/Taxas", "Outros") and "JUROS" in chave for r in todas):
+            continue
+        ultima = max(todas, key=lambda r: r["date"])
+        out.append({"chave": chave, "nome": rotulo_gasto(ultima, apelidos, termos), "valor": _reais(-ultima["amount_cents"]),
+                    "dia": int(ultima["date"][8:10])})
+    return sorted(out, key=lambda x: -x["valor"])
+
+
 def compute_ciclo_cartao(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any] | None:
     """The open card bill against what the plan sets aside to pay it: what is already in it (old installments,
     interest), what was bought this cycle, the pace projected to the closing day and what still fits per day."""
@@ -328,20 +360,31 @@ def compute_ciclo_cartao(ledger: Ledger, cfg: "Config", plano: dict[str, Any], t
     ja = lambda r: r["date"] < inicio.isoformat() or r["date"] > today.isoformat() or (r["installment_number"] or 1) > 1
     comprometido = -sum(r["amount_cents"] for r in rows if ja(r))
     novo = -sum(r["amount_cents"] for r in rows if not ja(r))
+    recorrentes = cobrancas_recorrentes(ledger, acc["id"], comp, {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()},
+                                        termos_privados(ledger, plano))
+    abertas = {_chave_recorrente(r) for r in rows}
+    previstas = [x for x in recorrentes if x["chave"] not in abertas]
+    reservado = sum(_cents(x["valor"]) for x in previstas)
     # the plan item that pays this bill: a card/bill outflow due in the bill's month
     teto = next((_cents(i.get("sai")) for i in plano.get("plano") or []
                  if i.get("sai") and RE_FATURA_PLANO.search(str(i.get("descricao", ""))) and _iso(i.get("data"))[:7] == comp), None)
     dias = (fim - inicio).days + 1
     passados = max(1, (min(today, fim) - inicio).days + 1)
     restantes = max(0, (fim - today).days)
-    projecao = comprometido + round(novo * dias / passados)
+    # a subscription that already fell this cycle is not a spending pace: only the rest is projected
+    chaves = {x["chave"] for x in recorrentes}
+    fixo_no_ciclo = -sum(r["amount_cents"] for r in rows if not ja(r) and _chave_recorrente(r) in chaves)
+    projecao = comprometido + fixo_no_ciclo + round((novo - fixo_no_ciclo) * dias / passados)
     atual = comprometido + novo
-    status = None if teto is None else ("estourou" if atual > teto else "atencao" if projecao > teto else "ok")
+    projecao += reservado
+    status = None if teto is None else ("estourou" if atual > teto else "atencao" if projecao > teto or atual + reservado > teto else "ok")
     return {"inicio": inicio.isoformat(), "fechamento": fim.isoformat(), "vencimento": vencimento.isoformat(),
             "teto": _reais(teto) if teto is not None else None, "atual": _reais(atual), "comprometido": _reais(comprometido),
             "novo": _reais(novo), "projecao": _reais(projecao), "dias": dias, "diasPassados": passados,
-            "diasRestantes": restantes, "porDia": _reais(max(0, (teto - atual)) // max(1, restantes)) if teto is not None else None,
-            "status": status}
+            "diasRestantes": restantes,
+            "porDia": _reais(max(0, (teto - atual - reservado)) // max(1, restantes)) if teto is not None else None,
+            "status": status, "reservado": _reais(reservado),
+            "previstas": [{k: v for k, v in x.items() if k != "chave"} for x in previstas]}
 
 
 def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any]:

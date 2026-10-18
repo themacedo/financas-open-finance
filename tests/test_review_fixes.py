@@ -591,3 +591,24 @@ def test_card_cycle_warns_when_the_pace_does_not_fit_the_plan(ledger, cfg, tax):
     # 300 in 5 of 31 days -> 1860 by the closing day, plus the 100 already committed: over the 1000 the plan has
     assert (c["projecao"], c["status"]) == (1960.0, "atencao")
     assert c["porDia"] == 23.07  # 600 over 26 days, rounded down: never more than fits
+
+
+def test_card_cycle_reserves_the_monthly_charges_still_to_come(ledger, cfg, tax):
+    from fin.config import CardConfig
+    from fin.painel import compute_ciclo_cartao
+
+    cfg.cards["nubank"] = CardConfig(closing_day=17, due_day=24)
+    sub = lambda tid, day, comp, v, desc: tx(tid, C, day, v, desc, card=True, ccm={"billForecastDate": comp})
+    data = {C: [sub("s8", "2026-08-07", "2026-08", 39.9, "STREAMING X"), sub("s9", "2026-09-07", "2026-09", 39.9, "STREAMING X"),
+                sub("c9", "2026-08-30", "2026-09", 149.9, "CAFE CLUBE"), sub("c10", "2026-09-30", "2026-10", 149.9, "CAFE CLUBE"),
+                sub("u9", "2026-09-10", "2026-09", 30.0, "APP CORRIDA"), sub("u10", "2026-10-02", "2026-10", 12.0, "APP CORRIDA"),
+                sub("x10", "2026-10-03", "2026-10", 500.0, "LOJA UNICA"),
+                sub("s11", "2026-10-19", "2026-11", 39.9, "STREAMING X")]}  # already in the open bill: not reserved again
+    _sync(ledger, data, cfg, tax, today=date(2026, 10, 20))
+    plano = {"plano": [{"data": "2026-11-24", "descricao": "Fatura do cartão", "sai": 300}]}
+    c = compute_ciclo_cartao(ledger, cfg, plano, date(2026, 10, 20))
+    # steady once a month -> reserved; varying rides and a one-off purchase -> not
+    assert [(x["valor"], x["dia"]) for x in c["previstas"]] == [(149.9, 30)]
+    assert (c["atual"], c["reservado"]) == (39.9, 149.9)
+    assert c["porDia"] == 3.93  # (300 - 39.90 - 149.90) / 28 days, rounded down
+    assert c["status"] == "ok"
