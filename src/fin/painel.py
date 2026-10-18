@@ -217,24 +217,34 @@ PARCELA = re.compile(r"\s*\d{1,2}/\d{1,2}\s*$")
 PIX_PREFIXO = re.compile(r"^(TRANSFERENCIA|TRANSFERÊNCIA|PIX)\b.*", re.I)
 
 
-def rotulo_gasto(row: Any) -> str:
-    """Where the money went, safe to show: the merchant, or "Pessoa física" when it reads like a person's name."""
+def rotulo_gasto(row: Any, apelidos: dict[str, str] | None = None) -> str:
+    """Where the money went, safe to show: the merchant, the nickname you gave the person (only when the nickname
+    itself has no name in it), or "Pessoa física" when it reads like a person's name."""
     from fin.privacy import block_reason
+
+    apelido = (apelidos or {}).get(row.get("counterpart_alias") if isinstance(row, dict) else row["counterpart_alias"])
+    if apelido and not block_reason(apelido):
+        return apelido
 
     desc = row["description"] or ""
     base = desc.split("|", 1)[1] if "|" in desc else (row["desc_norm"] or desc)
     base = PARCELA.sub("", base).strip()
     if PIX_PREFIXO.match(base):
         base = ""
+    if row["counterpart_kind"] != "person" and base and block_reason(base):
+        # "WELLHUB FULANA DE TAL": keep only the first word (the brand) when it alone is safe. Only the first word:
+        # the name detector misses spellings like "Anna", so anything after the brand may still be a name
+        prefixo = base.split()[0]
+        base = prefixo if len(prefixo) >= 4 and not block_reason(prefixo) else base
     if row["counterpart_kind"] == "person" or not base or block_reason(base):
         return "Pessoa física (nome oculto)" if base or row["counterpart_kind"] == "person" else "Pix ou transferência"
     return " ".join(w.capitalize() if len(w) > 2 else w.lower() for w in base.split())
 
 
-def _top(rows: list[Any], n: int = 3) -> list[dict[str, Any]]:
+def _top(rows: list[Any], n: int = 3, apelidos: dict[str, str] | None = None) -> list[dict[str, Any]]:
     por: dict[str, list[int]] = {}
     for r in rows:
-        v = por.setdefault(rotulo_gasto(r), [0, 0])
+        v = por.setdefault(rotulo_gasto(r, apelidos), [0, 0])
         v[0] += -r["amount_cents"]
         v[1] += 1
     top = sorted(por.items(), key=lambda kv: -kv[1][0])[:n]
@@ -278,13 +288,15 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
     gastos = [r for r in ledger.active_txs("date >= ? AND date <= ? AND amount_cents < 0 AND natureza='Despesa'",
                                            (ini.isoformat(), today.isoformat()))
               if (r["categoria"] or "Revisar") not in PJ_OWN_CATS]
+    # only the nicknames chosen for the dashboard (plano.yaml); the ledger has others with people's names in them
+    pessoas = {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()}
     por_cat: dict[str, list[Any]] = {}
     for r in gastos:
         por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
     itens_mes: dict[str, list[dict[str, Any]]] = {m: [] for m in meses}
     for r in ledger.active_txs("total_installments > 1 AND COALESCE(natureza,'Despesa')='Despesa'"):
         if r["competence"] in itens_mes:
-            itens_mes[r["competence"]].append({"nome": rotulo_gasto(r), "parcela": f"{r['installment_number']}/{r['total_installments']}",
+            itens_mes[r["competence"]].append({"nome": rotulo_gasto(r, pessoas), "parcela": f"{r['installment_number']}/{r['total_installments']}",
                                                "valor": _reais(-r["amount_cents"]), "categoria": r["categoria"] or "Revisar"})
     for pr in ledger.q("SELECT month, desc_norm, installment_number, total_installments, amount_cents, categoria FROM installments_projection"):
         if pr["month"] in itens_mes:
@@ -306,7 +318,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                    "despesasAnteriorMesCheio": _reais(cheio["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)),
                         "anterior": _reais(antes["categorias"].get(c, 0)),
-                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, [])),
+                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas),
                         "bruto": _reais(-sum(r["amount_cents"] for r in por_cat.get(c, [])))} for c in cats],
         "fixos": [{"nome": nome_fixo(n, apelidos), "valor": _reais(v), "dia": d, "pago": pago}
                   for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))],

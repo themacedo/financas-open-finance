@@ -131,13 +131,21 @@ def test_month_shift_and_same_period_of_last_month(tmp_path):
 
 
 def test_spending_label_hides_people_and_keeps_merchants():
-    row = lambda desc, norm=None, kind=None: {"description": desc, "desc_norm": norm or desc, "counterpart_kind": kind}
+    row = lambda desc, norm=None, kind=None: {"description": desc, "desc_norm": norm or desc, "counterpart_kind": kind,
+                                               "counterpart_alias": None}
     assert rotulo_gasto(row("Compra no débito|TOCA DO TATU")) == "Toca do Tatu"
     assert rotulo_gasto(row("Amazon 6/7")) == "Amazon"  # installment suffix out
-    assert rotulo_gasto(row("WELLHUB FULANO DA SILVA", "WELLHUB JOSE CARLOS")) == "Pessoa física (nome oculto)"
+    assert rotulo_gasto(row("Compra débito Wellhub Jose Carlos", "WELLHUB JOSE CARLOS")) == "Wellhub"  # brand kept, name cut
+    assert rotulo_gasto(row("MP *BARBEARIA", "MP BARBEARIA")) == "Pessoa física (nome oculto)"  # prefix too short
+    assert rotulo_gasto(row("Compra débito Wellhub Anna Paula F", "WELLHUB ANNA PAULA F")) == "Wellhub"  # "Anna" escapes the detector
     assert rotulo_gasto(row("Compra|EDUARDODEMORAES")) == "Pessoa física (nome oculto)"  # glued name
     assert rotulo_gasto(row("Transferência enviada pelo Pix|EMPRESA XYZ", kind="person")) == "Pessoa física (nome oculto)"
     assert rotulo_gasto(row("TRANSFERENCIA ENVIADA PELO PIX")) == "Pix ou transferência"
+    # a nickname chosen for the dashboard replaces "Pessoa física", unless it has a recognizable name in it
+    pix = {**row("Transferência enviada pelo Pix|FULANO DE TAL", kind="person"), "counterpart_alias": "PESSOA_028"}
+    assert rotulo_gasto(pix, {"PESSOA_028": "Professor de inglês"}) == "Professor de inglês"
+    assert rotulo_gasto(pix, {"PESSOA_028": "Maria (vizinha)"}) == "Pessoa física (nome oculto)"
+    assert rotulo_gasto(pix, {}) == "Pessoa física (nome oculto)"
 
 
 def test_clt_month_splits_received_and_scheduled(tmp_path):
