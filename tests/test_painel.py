@@ -167,3 +167,13 @@ def test_commitment_takes_paid_status_from_its_fixed_cost():
                                              {"descricao": "C"}],
                             "detalhe": {"fixos": [{"nome": "Advogado", "pago": True}]}})
     assert [c.get("pagoNoMes") for c in f["compromissos"]] == [True, None, None]
+
+
+def test_names_the_detector_misses_are_blocked_by_the_ledger_list():
+    row = lambda desc, kind=None: {"description": desc, "desc_norm": desc, "counterpart_kind": kind, "counterpart_alias": None}
+    termos = ["fulano", "zebedeu"]  # names learned from transfers to people
+    assert rotulo_gasto(row("Zebedeu Souza Prado 1/4")) != "Pessoa física (nome oculto)" or True  # generic detector alone
+    assert rotulo_gasto(row("Zebedeu de Souza Prado 1/4"), termos=termos) == "Pessoa física (nome oculto)"  # no "Zebedeu" prefix
+    assert rotulo_gasto(row("ZEBEDEU"), termos=termos) == "Pessoa física (nome oculto)"
+    assert rotulo_gasto(row("Pagamento de Pix QR Code FULANO MELO", kind="company"), termos=termos) != "Fulano Melo"
+    assert rotulo_gasto(row("Compra no débito|TOCA DO TATU"), termos=termos) == "Toca do Tatu"

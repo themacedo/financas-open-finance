@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 from fin.ledger import Ledger
+from fin.normalize import GENERIC_WORDS
 
 if TYPE_CHECKING:
     from fin.config import Config
@@ -218,11 +219,42 @@ PARCELA = re.compile(r"\s*\d{1,2}/\d{1,2}\s*$")
 PIX_PREFIXO = re.compile(r"^(TRANSFERENCIA|TRANSFERÊNCIA|PIX)\b.*", re.I)
 
 
-def rotulo_gasto(row: Any, apelidos: dict[str, str] | None = None) -> str:
+PARTICULAS = {"de", "da", "do", "das", "dos", "e", "ltda", "me", "eireli", "pix", "ted", "doc"}
+
+
+def nomes_de_pessoas(ledger: Ledger) -> list[str]:
+    """Every word of the names that appear in transfers to or from people (the ledger knows they are people).
+    The generic name detector misses many first names (and spellings like "Anna"); these words block them."""
+    nomes: set[str] = set()
+    for r in ledger.q("SELECT DISTINCT description FROM transactions WHERE counterpart_kind = 'person'"):
+        desc = r["description"] or ""
+        nome = desc.split("|", 1)[1] if "|" in desc else re.sub(r"^(PIX|TRANSFER\S*|TED|DOC)\s+(ENVIAD\S*|RECEBID\S*)?\s*", "", desc, flags=re.I)
+        nomes |= {w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{3,}", nome) if w.lower() not in PARTICULAS}
+    # words that are part of the transfer text, not of the name ("Pagamento de Pix QR Code", "Valor adicionado")
+    genericas = {_sem_acento(w).lower() for w in GENERIC_WORDS} | {"valor", "adicionado", "adicionada", "recebida", "enviada",
+                                                                   "qrcode", "conta", "saldo", "limite", "convertido"}
+    return sorted(n for n in nomes if _sem_acento(n) not in genericas)
+
+
+def _sem_acento(w: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", w) if unicodedata.category(c) != "Mn")
+
+
+def termos_privados(ledger: Ledger, plano: dict[str, Any]) -> list[str]:
+    """Names that must never reach the dashboard: people from the ledger plus the owner's own name."""
+    dono = [w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{3,}", str(plano.get("dono", "")))]
+    return sorted(set(nomes_de_pessoas(ledger)) | set(dono))
+
+
+def rotulo_gasto(row: Any, apelidos: dict[str, str] | None = None, termos: list[str] | None = None) -> str:
     """Where the money went, safe to show: the merchant, the nickname you gave the person (only when the nickname
     itself has no name in it), or "Pessoa física" when it reads like a person's name."""
-    from fin.privacy import block_reason
+    from functools import partial
 
+    from fin.privacy import block_reason as _br
+
+    block_reason = partial(_br, extra_terms=termos or ())
     apelido = (apelidos or {}).get(row.get("counterpart_alias") if isinstance(row, dict) else row["counterpart_alias"])
     if apelido and not block_reason(apelido):
         return apelido
@@ -242,10 +274,11 @@ def rotulo_gasto(row: Any, apelidos: dict[str, str] | None = None) -> str:
     return " ".join(w.capitalize() if len(w) > 2 else w.lower() for w in base.split())
 
 
-def _top(rows: list[Any], n: int = 3, apelidos: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def _top(rows: list[Any], n: int = 3, apelidos: dict[str, str] | None = None,
+         termos: list[str] | None = None) -> list[dict[str, Any]]:
     por: dict[str, list[int]] = {}
     for r in rows:
-        v = por.setdefault(rotulo_gasto(r, apelidos), [0, 0])
+        v = por.setdefault(rotulo_gasto(r, apelidos, termos), [0, 0])
         v[0] += -r["amount_cents"]
         v[1] += 1
     top = sorted(por.items(), key=lambda kv: -kv[1][0])[:n]
@@ -292,18 +325,19 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
               if (r["categoria"] or "Revisar") not in PJ_OWN_CATS]
     # only the nicknames chosen for the dashboard (plano.yaml); the ledger has others with people's names in them
     pessoas = {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()}
+    termos = termos_privados(ledger, plano)
     por_cat: dict[str, list[Any]] = {}
     for r in gastos:
         por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
     itens_mes: dict[str, list[dict[str, Any]]] = {m: [] for m in meses}
     for r in ledger.active_txs("total_installments > 1 AND COALESCE(natureza,'Despesa')='Despesa'"):
         if r["competence"] in itens_mes:
-            itens_mes[r["competence"]].append({"nome": rotulo_gasto(r, pessoas), "parcela": f"{r['installment_number']}/{r['total_installments']}",
+            itens_mes[r["competence"]].append({"nome": rotulo_gasto(r, pessoas, termos), "parcela": f"{r['installment_number']}/{r['total_installments']}",
                                                "valor": _reais(-r["amount_cents"]), "categoria": r["categoria"] or "Revisar"})
     for pr in ledger.q("SELECT month, desc_norm, installment_number, total_installments, amount_cents, categoria FROM installments_projection"):
         if pr["month"] in itens_mes:
             fake = {"description": pr["desc_norm"], "desc_norm": pr["desc_norm"], "counterpart_kind": None}
-            itens_mes[pr["month"]].append({"nome": rotulo_gasto(fake), "parcela": f"{pr['installment_number']}/{pr['total_installments']}",
+            itens_mes[pr["month"]].append({"nome": rotulo_gasto(fake, pessoas, termos), "parcela": f"{pr['installment_number']}/{pr['total_installments']}",
                                            "valor": _reais(-pr["amount_cents"]), "categoria": pr["categoria"] or "Revisar"})
     apelidos = plano.get("fixos_nomes") or {}
     clt = compute_clt(ledger, ini, today)
@@ -320,7 +354,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                    "despesasAnteriorMesCheio": _reais(cheio["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)),
                         "anterior": _reais(antes["categorias"].get(c, 0)),
-                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas),
+                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas, termos=termos),
                         "bruto": _reais(-sum(r["amount_cents"] for r in por_cat.get(c, [])))} for c in cats],
         "fixos": [{"nome": nome_fixo(n, apelidos), "valor": _reais(v), "dia": d, "pago": pago}
                   for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))],
@@ -337,7 +371,7 @@ MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 
 
 def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: date, ant_ini: date, ant_fim: date,
-                    today: date) -> dict[str, Any]:
+                    today: date, termos: list[str] | None = None) -> dict[str, Any]:
     """Spending by category, income by source, CLT and PJ for [ini, fim) against [ant_ini, ant_fim).
     A period still running is cut at today, and so is the comparison (same number of days)."""
     from fin.reports import PJ_OWN_CATS, date_range_totals
@@ -362,7 +396,7 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnterior": _reais(antes["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),
-                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas),
+                        "n": len(por_cat.get(c, [])), "onde": _top(por_cat.get(c, []), apelidos=pessoas, termos=termos),
                         "bruto": _reais(-sum(r["amount_cents"] for r in por_cat.get(c, [])))} for c in cats],
         "clt": clt,
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
@@ -376,6 +410,7 @@ def compute_periodos(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today
     from fin.reports import fixed_cost_status
 
     pessoas = {str(k): str(v) for k, v in (plano.get("apelidos_painel") or {}).items()}
+    termos = termos_privados(ledger, plano)
     nomes_fixos = plano.get("fixos_nomes") or {}
     primeiro = ledger.one("SELECT MIN(date) d FROM transactions")["d"]
     inicio_dados = date.fromisoformat(primeiro) if primeiro else today
@@ -385,20 +420,20 @@ def compute_periodos(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today
         ini = seg - timedelta(weeks=k)
         if ini + timedelta(days=6) < inicio_dados:
             break
-        p = compute_periodo(ledger, pessoas, ini, ini + timedelta(days=7), ini - timedelta(days=7), ini, today)
+        p = compute_periodo(ledger, pessoas, ini, ini + timedelta(days=7), ini - timedelta(days=7), ini, today, termos)
         fimv = ini + timedelta(days=6)
         semanas.append({"chave": f"s-{ini.isoformat()}", "rotulo": f"{ini:%d/%m} a {fimv:%d/%m}", **p})
     for k in range(n_meses):
         ini = _mes(today, -k)
         if _mes(ini, 1) <= inicio_dados:
             break
-        p = compute_periodo(ledger, pessoas, ini, _mes(ini, 1), _mes(ini, -1), ini, today)
+        p = compute_periodo(ledger, pessoas, ini, _mes(ini, 1), _mes(ini, -1), ini, today, termos)
         fixos = [{"nome": nome_fixo(n, nomes_fixos), "valor": _reais(v), "dia": d, "pago": pago}
                  for n, v, d, pago in fixed_cost_status(ledger, cfg, ini.strftime("%Y-%m"))]
         meses.append({"chave": f"m-{ini:%Y-%m}", "rotulo": f"{MESES_ABREV[ini.month - 1]}/{ini:%y}", "fixos": fixos, **p})
     for ano in range(today.year, inicio_dados.year - 1, -1):
         ini = date(ano, 1, 1)
-        p = compute_periodo(ledger, pessoas, ini, date(ano + 1, 1, 1), date(ano - 1, 1, 1), ini, today)
+        p = compute_periodo(ledger, pessoas, ini, date(ano + 1, 1, 1), date(ano - 1, 1, 1), ini, today, termos)
         anos.append({"chave": f"a-{ano}", "rotulo": str(ano), **p})
     return {"semana": semanas, "mes": meses, "ano": anos}
 

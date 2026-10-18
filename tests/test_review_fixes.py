@@ -244,7 +244,7 @@ def test_p2_raw_description_is_checked_before_sending(ledger, cfg, tax):
     assert {_row(ledger, p)["cat_source"] for p in ("m", "o")} == {"blocked"}
 
 
-@pytest.mark.parametrize("desc", ["SOUZA MATERIAIS", "SILVA SOUZA COMERCIO", "DONA ZEZE QUITANDA", "CONCEICAO DOCES"])
+@pytest.mark.parametrize("desc", ["MACEDO MATERIAIS", "SILVA SOUZA COMERCIO", "DONA ZEZE QUITANDA", "CONCEICAO DOCES"])
 def test_p3_surnames_terms_and_address_words(desc):
     assert block_reason(desc, ["joao souza", "conceição"]) is not None
 
@@ -390,8 +390,8 @@ def test_o14_any_keychain_error_is_a_clear_message(monkeypatch):
 
 def test_privacy_glued_and_acquirer_names():
     from fin.privacy import block_reason
-    for txt in ["FERNANDOLUIZV", "ANDRESSASILVADE", "MP ESTERDEALMEIDAPAU", "JIM BARROS CEL L",
-                "HAMILTON CESAR DA SILV", "NELSON S MIRANDA", "GLEYCEKELLY", "MAYARAALONSODA"]:
+    for txt in ["ROBERTOLUIZV", "JULIANASILVADE", "MP CARLADEALMEIDAPAU", "JIM BARROS TEL L",
+                "RICARDO CESAR DA SILV", "RAFAEL S MIRANDA", "PATRICIAKELLY", "BRUNAALONSODA"]:
         assert block_reason(txt), txt
     for txt in ["AMAZON SERVICOS DE VAR", "IFOOD CLUB", "KINOPLEX TOP SHOPPING", "RAIA DROGASIL S A",
                 "UBER UBER TRIP HELP U", "SUPERMERCADO VIANENSE"]:
@@ -400,7 +400,7 @@ def test_privacy_glued_and_acquirer_names():
 
 def test_real_rotativo_carryover_and_pix_on_credit(ledger, cfg, tax):
     data = {C: [tx("rot", C, "2026-10-04", 3900.22, "SALDO EM ROTATIVO", card=True, ccm=FORECAST_NOV),
-                tx("pxc", C, "2026-10-05", 149.29, "MURIELLE SILVA COSTA", card=True, ccm=FORECAST_NOV,
+                tx("pxc", C, "2026-10-05", 149.29, "FULANA SILVA COSTA", card=True, ccm=FORECAST_NOV,
                    op="OPERACOES_CREDITO_CONTRATADAS_CARTAO")]}
     _sync(ledger, data, cfg, tax)
     run_categorize(ledger, cfg, tax, None)
