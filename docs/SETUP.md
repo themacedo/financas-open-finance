@@ -251,6 +251,10 @@ Nenhum lançamento, contraparte ou credencial.
 
 Contas fixas: o `padrao` aceita alternativas separadas por `|`, para a mesma conta que chega como boleto ou
 como Pix com outro nome (`padrao: "PGFN|MINISTERIO DA FAZENDA"`).
+Cada conta fixa conta pagamentos de `antecedencia` dias antes do vencimento (padrão 10) até o mesmo ponto do mês
+seguinte, então uma conta paga atrasada fica no mês dela. `de` e `ate` (AAAA-MM) limitam os meses de parcelas e
+compromissos com prazo. Um mesmo débito paga uma conta só: a cujo padrão aparece primeiro na descrição e, empatando,
+a de valor mais próximo.
 
 ### Desfazer tudo
 

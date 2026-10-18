@@ -86,6 +86,9 @@ class FixedCost:
     valor_cents: int
     dia: int
     padrao: str
+    de: str | None = None  # AAAA-MM: first month it is due (installments that start later)
+    ate: str | None = None  # AAAA-MM: last month it is due
+    antecedencia: int = 10  # how many days before the due date a payment still counts for that month
 
 
 @dataclass
@@ -180,6 +183,9 @@ def config_from_dict(raw: dict[str, Any], source: Path | None = None) -> Config:
             valor_cents=_cents(f.get("valor")),
             dia=int(f.get("dia") or 1),
             padrao=str(f.get("padrao") or f["nome"]).upper(),
+            de=str(f["de"])[:7] if f.get("de") else None,
+            ate=str(f["ate"])[:7] if f.get("ate") else None,
+            antecedencia=int(f.get("antecedencia") or 10),
         )
         for f in (raw.get("fixed_costs") or [])
     ]

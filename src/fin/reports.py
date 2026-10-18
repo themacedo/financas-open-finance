@@ -18,7 +18,8 @@ PF x PJ (owner of the account, config pluggy.items[].owner):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+import math
+from datetime import date, timedelta
 from typing import Any
 
 from fin.config import Config, Taxonomy
@@ -272,22 +273,42 @@ def _average_spend(ledger: Ledger, month: str, cond: str, owner: str | None = No
     return sum(totals) // len(totals) if totals else 0
 
 
+def fixed_cost_window(month: str, day: int, antecedencia: int = 10) -> tuple[date, date]:
+    """Payments that count for `month`: from `antecedencia` days before its due date up to the same point of next
+    month. A bill paid late (September's phone paid on 15/10) stays with September; windows never overlap."""
+    d = timedelta(days=antecedencia)
+    return _due_date(month, day) - d, _due_date(add_months(month, 1), day) - d
+
+
+def _match_pos(row: Any, padroes: list[str]) -> int | None:
+    texto = f"{row['desc_norm'] or ''} | {(row['description'] or '').upper()}"
+    pos = [texto.find(x) for x in padroes if x in texto]
+    return min(pos) if pos else None
+
+
 def fixed_cost_status(ledger: Ledger, cfg: Config, month: str, owner: str | None = None) -> list[tuple[str, int, int, bool]]:
     # The payment is searched in every account, whatever the view: a personal bill paid from the PJ account is
     # still paid (`owner` only scopes the views that call this; it no longer filters where the payment came from).
     del owner
-    rows = ledger.active_txs("(competence=? OR substr(date,1,7)=?) AND amount_cents < 0", (month, month))
-    out = []
-    for fc in cfg.fixed_costs:
-        # paid when the matching debits of the month reach ~80% of the expected value (a R$ 20 Pix to the same
-        # person does not mark a R$ 1.660 installment as paid; two R$ 99,99 plans cover R$ 199,98)
-        # padrao accepts alternatives separated by "|" (the same bill may come as boleto or as Pix to another name)
-        padroes = [x.strip() for x in fc.padrao.split("|") if x.strip()]
-        hits = sum(-r["amount_cents"] for r in rows
-                   if any(x in (r["desc_norm"] or "") or x in (r["description"] or "").upper() for x in padroes))
-        paid = hits > 0 and hits >= 0.8 * fc.valor_cents
-        out.append((fc.nome, fc.valor_cents, fc.dia, paid))
-    return out
+    ativos = [fc for fc in cfg.fixed_costs if not ((fc.de and month < fc.de) or (fc.ate and month > fc.ate))]
+    candidatos: dict[int, list[tuple[int, float, int]]] = {}  # local_id -> [(match position, size gap, fc index)]
+    valor_tx: dict[int, int] = {}
+    for i, fc in enumerate(ativos):
+        ini, fim = fixed_cost_window(month, fc.dia, fc.antecedencia)
+        padroes = [x.strip() for x in fc.padrao.split("|") if x.strip()]  # alternatives: boleto or Pix to another name
+        for r in ledger.active_txs("date >= ? AND date < ? AND amount_cents < 0", (ini.isoformat(), fim.isoformat())):
+            pos = _match_pos(r, padroes)
+            if pos is not None:
+                gap = abs(math.log(-r["amount_cents"] / fc.valor_cents)) if fc.valor_cents else 0.0
+                candidatos.setdefault(r["local_id"], []).append((pos, gap, i))
+                valor_tx[r["local_id"]] = -r["amount_cents"]
+    # a debit matching two bills ("WELLHUB FULANA" vs the Anna installments) pays only one: the pattern that
+    # appears first in the description, then the bill whose value is closest
+    pago = [0] * len(ativos)
+    for lid, opcoes in candidatos.items():
+        pago[min(opcoes)[2]] += valor_tx[lid]
+    # paid when the matched debits reach ~80% of the expected value (two R$ 99,99 plans cover R$ 199,98)
+    return [(fc.nome, fc.valor_cents, fc.dia, pago[i] > 0 and pago[i] >= 0.8 * fc.valor_cents) for i, fc in enumerate(ativos)]
 
 
 def fixed_until(ledger: Ledger, cfg: Config, today: date, until: date, owner: str | None = None) -> int:

@@ -315,10 +315,44 @@ def test_fixed_cost_paid_from_pj_account_counts_as_paid_in_pf_view(tmp_path, led
 
 def test_fixed_cost_pattern_accepts_alternatives(tmp_path, ledger, tax):
     """Real case of 16/10/2026: the PGFN installment was paid by Pix and came as MINISTERIO DA FAZENDA."""
-    cfg = pj_cfg(tmp_path, fixed_costs=[{"nome": "MEI - Desenrola", "valor": 108.12, "dia": 30,
+    cfg = pj_cfg(tmp_path, fixed_costs=[{"nome": "MEI - Desenrola", "valor": 108.12, "dia": 30, "antecedencia": 20,
                                          "padrao": "PGFN | MINISTERIO DA FAZENDA"}])
     data = {ACC_PJ: [tx("pgfn", ACC_PJ, "2026-10-16", -108.12, "PIX ENVIADO MINISTERIO DA FAZENDA", op="PIX", method="PIX",
                         payer=OWN_PJ, receiver=party("MINISTERIO DA FAZENDA", "00394460000141", "001", "1-1"))]}
     run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
     s = monthly_summary(ledger, cfg, tax, "2026-10", today=TODAY, owner="pf")
     assert s.fixos_pendentes == []
+
+
+def _status(ledger, cfg, month):
+    from fin.reports import fixed_cost_status
+    return {n: pago for n, _v, _d, pago in fixed_cost_status(ledger, cfg, month)}
+
+
+def test_late_bill_stays_with_its_own_month(tmp_path, ledger, tax):
+    """Real case of 15/10/2026: September's phone bill (due 28) paid on 15/10 is not October's."""
+    cfg = pj_cfg(tmp_path, fixed_costs=[{"nome": "Celular", "valor": 59, "dia": 28, "padrao": "TELEFONICA"}])
+    data = {ACC_PJ: [tx("tel", ACC_PJ, "2026-10-15", -60.34, "PIX ENVIADO TELEFONICA BRASIL", op="PIX", method="PIX",
+                        payer=OWN_PJ, receiver=party("TELEFONICA BRASIL", "02558157000162", "001", "1-1"))]}
+    run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
+    assert _status(ledger, cfg, "2026-09") == {"Celular": True}
+    assert _status(ledger, cfg, "2026-10") == {"Celular": False}
+
+
+def test_bill_outside_its_months_is_not_listed_and_one_debit_pays_one_bill(tmp_path, ledger, tax):
+    """Real case of 18/10/2026: a 6x installment that starts in November showed as paid in October because
+    the same name matched a R$ 480 Pix and a gym plan in that person's name."""
+    cfg = pj_cfg(tmp_path, fixed_costs=[
+        {"nome": "Academia", "valor": 99.99, "dia": 9, "padrao": "WELLHUB"},
+        {"nome": "Parcela", "valor": 166, "dia": 15, "padrao": "FULANA TESTE", "de": "2026-11", "ate": "2027-04"},
+        {"nome": "Passagem", "valor": 1660, "dia": 21, "padrao": "FULANA TESTE", "ate": "2026-12"}])
+    data = {ACC_PJ: [tx("gym", ACC_PJ, "2026-11-08", -99.99, "COMPRA DEBITO WELLHUB FULANA TESTE"),
+                     tx("par", ACC_PJ, "2026-11-14", -166.0, "PIX ENVIADO FULANA TESTE", op="PIX", method="PIX", payer=OWN_PJ,
+                        receiver=party("FULANA TESTE", "12345678909", "077", "1-1")),
+                     tx("gym2", ACC_PJ, "2026-12-08", -199.98, "COMPRA DEBITO WELLHUB FULANA TESTE")]}
+    run_sync(ledger, pj_client(data), cfg, tax, today=TODAY, now=NOW)
+    # December: only the gym, big enough to fool the installment if one debit could pay two bills
+    assert _status(ledger, cfg, "2026-12") == {"Academia": True, "Parcela": False, "Passagem": False}
+    assert "Parcela" not in _status(ledger, cfg, "2026-10") and "Passagem" not in _status(ledger, cfg, "2027-01")
+    # the gym debit goes to the gym (pattern first in the description); the R$ 166 Pix to the installment (closest value)
+    assert _status(ledger, cfg, "2026-11") == {"Academia": True, "Parcela": True, "Passagem": False}
