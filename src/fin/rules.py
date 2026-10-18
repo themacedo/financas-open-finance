@@ -53,6 +53,7 @@ RE_FEE = re.compile(r"\biof\b|juros|anuidade|multa|encargo|tarifa", re.I)
 RE_INVEST = re.compile(r"aplica[cç][aã]o|resgate|rendimento|\bcdb\b|tesouro|poupan[cç]a|caixinha", re.I)
 
 RULE_SOURCES = ("rule", "counterpart")
+DECIDED_SOURCES = ("dictionary", "cache", "llm")
 RETIRADA, APORTE = "Retirada PJ→PF", "Aporte PF→PJ"
 OWNER_TRANSFER_CATS = (RETIRADA, APORTE)
 FEE_CAT = {"pf": "Impostos/Taxas", "pj": "Taxas bancárias PJ"}
@@ -348,7 +349,12 @@ def apply_all(ledger: Ledger, cfg: Config, tax: Taxonomy, today: date | None = N
             fields: dict[str, Any] = {"rule": d.rule, "pair_id": d.pair_id, "natureza": d.natureza}
             if d.alias:
                 fields["counterpart_alias"] = d.alias
-            if d.categoria is not None:
+            # a rule that can only say "review it" does not undo what the dictionary, the cache or the AI already
+            # decided: before, it reset those rows every sync and categorize put them back (wrong in between)
+            fraca = d.categoria == "Revisar" and d.review == "pendente"
+            if fraca and r["cat_source"] in DECIDED_SOURCES and (r["categoria"] or "Revisar") != "Revisar":
+                fields["natureza"] = r["natureza"]
+            elif d.categoria is not None:
                 fields.update(categoria=d.categoria, necessidade=d.necessidade, fonte=d.fonte,
                               cat_source=d.cat_source, review_status=d.review, confidence=None)
                 if "essencial" in d.extra:

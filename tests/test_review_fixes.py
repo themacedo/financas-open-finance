@@ -623,3 +623,18 @@ def test_a_charge_that_stopped_is_not_reserved(ledger, cfg, tax):
     _sync(ledger, {C: [sub("d7", "2026-07-19", "2026-08"), sub("d8", "2026-08-23", "2026-09")]}, cfg, tax, today=date(2026, 10, 20))
     plano = {"plano": [{"data": "2026-11-24", "descricao": "Fatura do cartão", "sai": 300}]}
     assert compute_ciclo_cartao(ledger, cfg, plano, date(2026, 10, 20))["previstas"] == []  # last one 58 days ago
+
+
+def test_a_review_only_rule_keeps_what_the_dictionary_decided(ledger, cfg, tax):
+    from fin.rules import apply_all
+
+    op = "OPERACOES_CREDITO_CONTRATADAS_CARTAO"
+    data = {C: [tx("pix1", C, "2026-10-05", 300.0, "Pagamento de pix", card=True, op=op, ccm=FORECAST_NOV),
+                tx("pix2", C, "2026-10-06", 80.0, "Pagamento de pix B", card=True, op=op, ccm=FORECAST_NOV)]}
+    _sync(ledger, data, cfg, tax)
+    lid = _row(ledger, "pix1")["local_id"]
+    ledger.update_tx(lid, {"categoria": "Transporte", "natureza": "Despesa", "cat_source": "dictionary", "review_status": "auto"})
+    assert apply_all(ledger, cfg, tax)["rules_changed"] == 0  # nothing to redo, sync after sync
+    kept, other = _row(ledger, "pix1"), _row(ledger, "pix2")
+    assert (kept["categoria"], kept["cat_source"], kept["review_status"]) == ("Transporte", "dictionary", "auto")
+    assert (other["categoria"], other["review_status"]) == ("Revisar", "pendente")  # still undecided: still flagged
