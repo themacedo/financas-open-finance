@@ -570,3 +570,24 @@ def test_automatic_sweep_balance_comes_from_the_rows(ledger, cfg, tax):
     assert posicao_em(ledger, TODAY, TODAY)["investimentos"] == 100.0
     # the money going in and out of the sweep does not move the position
     assert posicao_em(ledger, date(2026, 10, 5), TODAY)["posicao"] == posicao_em(ledger, date(2026, 10, 1), TODAY)["posicao"]
+
+
+def test_card_cycle_warns_when_the_pace_does_not_fit_the_plan(ledger, cfg, tax):
+    from fin.config import CardConfig
+    from fin.painel import compute_ciclo_cartao
+
+    cfg.cards["nubank"] = CardConfig(closing_day=17, due_day=24)
+    nov = {"billForecastDate": "2026-11"}
+    data = {C: [tx("old", C, "2026-10-23", 100.0, "LOJA A 2/3", card=True,
+                   ccm={**nov, "installmentNumber": 2, "totalInstallments": 3, "purchaseDate": "2026-09-23"}),
+                tx("n1", C, "2026-10-18", 150.0, "MERCADO", card=True, ccm=nov),
+                tx("n2", C, "2026-10-20", 150.0, "POSTO", card=True, ccm=nov)]}
+    _sync(ledger, data, cfg, tax, today=date(2026, 10, 22))
+    plano = {"plano": [{"data": "2026-10-24", "descricao": "Cartão (outubro)", "sai": 3900},
+                       {"data": "2026-11-24", "descricao": "Fatura do cartão", "sai": 1000}]}
+    c = compute_ciclo_cartao(ledger, cfg, plano, date(2026, 10, 22))
+    assert (c["inicio"], c["fechamento"], c["teto"]) == ("2026-10-18", "2026-11-17", 1000.0)  # November's item, not October's
+    assert (c["comprometido"], c["novo"], c["atual"]) == (100.0, 300.0, 400.0)  # the later installment was already there
+    # 300 in 5 of 31 days -> 1860 by the closing day, plus the 100 already committed: over the 1000 the plan has
+    assert (c["projecao"], c["status"]) == (1960.0, "atencao")
+    assert c["porDia"] == 23.07  # 600 over 26 days, rounded down: never more than fits

@@ -304,6 +304,46 @@ def compute_clt(ledger: Ledger, ini: date, today: date, fim: date | None = None)
     return {"itens": itens, "recebido": soma("recebido"), "previsto": soma("previsto")}
 
 
+RE_FATURA_PLANO = re.compile(r"fatura|cart[aã]o", re.I)
+
+
+def compute_ciclo_cartao(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any] | None:
+    """The open card bill against what the plan sets aside to pay it: what is already in it (old installments,
+    interest), what was bought this cycle, the pace projected to the closing day and what still fits per day."""
+    from fin.rules import CARD_PAYMENT_DUP, card_competence
+
+    acc = next((a for a in ledger.accounts() if a["type"] == "CREDIT"), None)
+    if acc is None:
+        return None
+    card = cfg.card(acc["bank"])
+    fecha, vence = card.closing_day, card.due_day
+    if not fecha or not vence:
+        return None
+    comp = card_competence(today, fecha, vence)
+    inicio = (date(today.year, today.month, 1) if today.day >= fecha else _mes(today, -1)).replace(day=fecha) + timedelta(days=1)
+    fim = _mes(inicio, 1).replace(day=fecha)
+    vencimento = date(int(comp[:4]), int(comp[5:]), min(vence, 28))
+    rows = [r for r in ledger.active_txs("account_id=? AND competence=?", (acc["id"], comp))
+            if r["rule"] not in ("card_bill_payment", CARD_PAYMENT_DUP) and not (r["rule"] == "card_carryover" and r["amount_cents"] > 0)]
+    ja = lambda r: r["date"] < inicio.isoformat() or r["date"] > today.isoformat() or (r["installment_number"] or 1) > 1
+    comprometido = -sum(r["amount_cents"] for r in rows if ja(r))
+    novo = -sum(r["amount_cents"] for r in rows if not ja(r))
+    # the plan item that pays this bill: a card/bill outflow due in the bill's month
+    teto = next((_cents(i.get("sai")) for i in plano.get("plano") or []
+                 if i.get("sai") and RE_FATURA_PLANO.search(str(i.get("descricao", ""))) and _iso(i.get("data"))[:7] == comp), None)
+    dias = (fim - inicio).days + 1
+    passados = max(1, (min(today, fim) - inicio).days + 1)
+    restantes = max(0, (fim - today).days)
+    projecao = comprometido + round(novo * dias / passados)
+    atual = comprometido + novo
+    status = None if teto is None else ("estourou" if atual > teto else "atencao" if projecao > teto else "ok")
+    return {"inicio": inicio.isoformat(), "fechamento": fim.isoformat(), "vencimento": vencimento.isoformat(),
+            "teto": _reais(teto) if teto is not None else None, "atual": _reais(atual), "comprometido": _reais(comprometido),
+            "novo": _reais(novo), "projecao": _reais(projecao), "dias": dias, "diasPassados": passados,
+            "diasRestantes": restantes, "porDia": _reais(max(0, (teto - atual)) // max(1, restantes)) if teto is not None else None,
+            "status": status}
+
+
 def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today: date) -> dict[str, Any]:
     """Month by category against the same days of last month, fixed costs, future installments and the PJ."""
     from fin.reports import committed_installments, date_range_totals, fixed_cost_status, month_totals
@@ -365,6 +405,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
         "periodos": compute_periodos(ledger, cfg, plano, today),
         "posicaoSerie": posicao_serie(ledger, today),
+        "cicloCartao": compute_ciclo_cartao(ledger, cfg, plano, today),
         "inicioDados": _inicio_dados(ledger),
     }
 
