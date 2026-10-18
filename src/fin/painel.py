@@ -364,7 +364,7 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
         "pj": {"faturamento": _reais(pj["receitas"]), "retiradas": _reais(pj["retiradas"]),
                "custos": {c: _reais(v) for c, v in sorted(pj["categorias"].items(), key=lambda kv: -kv[1])}},
         "periodos": compute_periodos(ledger, cfg, plano, today),
-        "posicaoMensal": posicao_mensal(ledger, today),
+        "posicaoSerie": posicao_serie(ledger, today),
     }
 
 
@@ -405,17 +405,43 @@ def posicao_em(ledger: Ledger, dia: date, today: date) -> dict[str, float]:
     return {"contas": _reais(contas), "cartao": _reais(cartao), "posicao": _reais(contas - cartao)}
 
 
-def posicao_mensal(ledger: Ledger, today: date, n: int = 12) -> list[dict[str, Any]]:
-    """End-of-month net position for the last n months with data, oldest first, plus today."""
+def posicao_serie(ledger: Ledger, today: date, n_semanas: int = 12, n_meses: int = 12) -> dict[str, list[dict[str, Any]]]:
+    """Net position at the end of each week (Sunday), month and year with data, oldest first; the last point is today."""
     primeiro = ledger.one("SELECT MIN(date) d FROM transactions")["d"]
     inicio = date.fromisoformat(primeiro) if primeiro else today
-    out = []
-    for k in range(n, 0, -1):
-        fim = _mes(today, -k + 1) - timedelta(days=1)
-        if fim >= inicio:
-            out.append({"data": fim.isoformat(), "rotulo": MESES_ABREV[fim.month - 1], **posicao_em(ledger, fim, today)})
-    out.append({"data": today.isoformat(), "rotulo": "hoje", **posicao_em(ledger, today, today)})
-    return out
+    hoje = {"data": today.isoformat(), "rotulo": "hoje", **posicao_em(ledger, today, today)}
+    dom = today - timedelta(days=today.weekday() + 1)  # last Sunday before this week
+    semanas = [dom - timedelta(weeks=k) for k in range(n_semanas - 1, -1, -1)]
+    meses = [_mes(today, -k + 1) - timedelta(days=1) for k in range(n_meses, 0, -1)]
+    anos = [date(a, 12, 31) for a in range(inicio.year, today.year)]
+    ponto = lambda d, rot: {"data": d.isoformat(), "rotulo": rot, **posicao_em(ledger, d, today)}
+    return {"semana": [ponto(d, f"{d:%d/%m}") for d in semanas if d >= inicio] + [hoje],
+            "mes": [ponto(d, MESES_ABREV[d.month - 1]) for d in meses if d >= inicio] + [hoje],
+            "ano": [ponto(d, str(d.year)) for d in anos if d >= inicio] + [hoje]}
+
+
+DIVIDA_RULES = ("debt_payment", "loan_received")
+PIX_CREDITO_RULES = ("card_credit_op", "card_limit_to_account")
+
+
+def compute_ajustes(ledger: Ledger, ini: date, ate: date, resultado_cents: int, variacao_cents: int) -> dict[str, float]:
+    """What moves the accounts and the card debt without being income or spending, so that
+    resultado + ajustes = variação da posição. `naoExplicado` is the leftover: zero when every row is accounted for."""
+    from fin.rules import CARD_PAYMENT_DUP
+
+    rows = [r for r in ledger.active_txs("date >= ? AND date <= ?", (ini.isoformat(), ate.isoformat()))
+            if r["rule"] != CARD_PAYMENT_DUP and r["natureza"] in ("Transferência", "Investimento")]
+    soma = lambda f: sum(r["amount_cents"] for r in rows if f(r))
+    contas_fora = soma(lambda r: r["rule"] in ("own_transfer", "own_transfer_extra") and not r["pair_id"])
+    pix = soma(lambda r: r["rule"] in PIX_CREDITO_RULES)
+    dividas = soma(lambda r: r["rule"] in DIVIDA_RULES)
+    aplic = soma(lambda r: r["natureza"] == "Investimento")
+    # own transfers between connected accounts, bill payments and the rotativo pair cancel out; what is left is
+    # a transfer to someone outside (a person marked as transfer, a service fee)
+    outras = soma(lambda r: r["natureza"] == "Transferência") - contas_fora - pix - dividas
+    nao = variacao_cents - resultado_cents - contas_fora - pix - dividas - aplic - outras
+    return {"contasFora": _reais(contas_fora), "custoPixCredito": _reais(pix), "emprestimos": _reais(dividas),
+            "aplicacoes": _reais(aplic), "outrasTransferencias": _reais(outras), "naoExplicado": _reais(nao)}
 
 
 def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: date, ant_ini: date, ant_fim: date,
@@ -435,17 +461,22 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
             por_cat.setdefault(r["categoria"] or "Revisar", []).append(r)
     cats = sorted(set(atual["categorias"]) | set(antes["categorias"]), key=lambda c: -atual["categorias"].get(c, 0))
     clt = compute_clt(ledger, ini, today, fim)
+    # other income only: without the withdrawal (same money), the salary and the PJ billing that a
+    # client paid straight into a PF account (already counted as PJ revenue)
+    outros = max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"])
+                 - sum(v for f, v in atual["fontes"].items() if f in pj["fontes"]))
+    custos_pj = sum(pj["categorias"].values())
+    entrou_cents = _cents(clt["recebido"]) + pj["receitas"] + outros
+    posicao = {"inicio": posicao_em(ledger, ini - timedelta(days=1), today), "fim": posicao_em(ledger, ate, today)}
     return {
         "inicio": ini.isoformat(), "fim": (fim - timedelta(days=1)).isoformat(), "ate": ate.isoformat(),
         "anteriorInicio": ant_ini.isoformat(), "anteriorAte": ant_ate.isoformat(), "emCurso": ate < fim - timedelta(days=1),
         "entradas": {"clt": clt["recebido"], "pj": _reais(pj["receitas"]),
-                     # other income only: without the withdrawal (same money), the salary and the PJ billing that a
-                     # client paid straight into a PF account (already counted as PJ revenue)
-                     "outros": _reais(max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"])
-                                          - sum(v for f, v in atual["fontes"].items() if f in pj["fontes"]))),
-                     "custosPj": _reais(sum(pj["categorias"].values()))},
+                     "outros": _reais(outros), "custosPj": _reais(custos_pj)},
         "cobertura": compute_cobertura(ledger, ini, ate),
-        "posicao": {"inicio": posicao_em(ledger, ini - timedelta(days=1), today), "fim": posicao_em(ledger, ate, today)},
+        "posicao": posicao,
+        "ajustes": compute_ajustes(ledger, ini, ate, entrou_cents - atual["despesas"] - custos_pj,
+                                   _cents(posicao["fim"]["posicao"]) - _cents(posicao["inicio"]["posicao"])),
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnterior": _reais(antes["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),

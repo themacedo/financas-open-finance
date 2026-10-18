@@ -490,3 +490,24 @@ def test_two_real_payments_of_the_same_value_are_not_duplicates(ledger, cfg, tax
                receiver=party("EMISSOR", CNPJ_CARD, "999")) for k in (1, 2)]
     _sync(ledger, {C: pays, I: bols}, cfg, tax)
     assert {_row(ledger, p)["rule"] for p in ("pay1", "pay2")} == {"card_bill_payment"}
+
+
+def test_month_close_reconciles_with_the_net_position_to_the_cent(ledger, cfg, tax):
+    from fin.painel import compute_periodo
+
+    data = {C: [tx("sal", C, "2026-10-03", 1545.51, "Saldo em rotativo", card=True, ccm=FORECAST_NOV),
+                tx("cred", C, "2026-10-03", -1545.51, "Crédito de rotativo", card=True, ccm=FORECAST_NOV),
+                tx("buy", C, "2026-10-04", 90.0, "LOJA X", card=True, ccm=FORECAST_NOV)],
+            NB: [tx("loan", NB, "2026-10-02", 1000.0, "Depósito de empréstimo", op="OPERACAO_CREDITO"),
+                 tx("parc", NB, "2026-10-06", -233.89, "Parcela Paga | Renegociação", op="OPERACAO_CREDITO"),
+                 tx("fora", NB, "2026-10-07", 303.47, "Transferência Recebida", receiver=OWN_ITAU, payer=OWN_ITAU),
+                 tx("pao", NB, "2026-10-08", -12.0, "PADARIA EXEMPLO")]}
+    _sync(ledger, data, cfg, tax)
+    assert {_row(ledger, p)["rule"] for p in ("sal", "cred")} == {"card_carryover"}  # the pair is neutral
+    assert (_row(ledger, "loan")["rule"], _row(ledger, "loan")["natureza"]) == ("loan_received", "Transferência")
+    p = compute_periodo(ledger, {}, date(2026, 10, 1), date(2026, 11, 1), date(2026, 9, 1), date(2026, 10, 1), TODAY)
+    e, a = p["entradas"], p["ajustes"]
+    resultado = e["clt"] + e["pj"] + e["outros"] - p["resumo"]["despesas"] - e["custosPj"]
+    variacao = p["posicao"]["fim"]["posicao"] - p["posicao"]["inicio"]["posicao"]
+    assert a["emprestimos"] == round(1000 - 233.89, 2) and a["naoExplicado"] == 0
+    assert round(resultado + sum(v for k, v in a.items() if k != "naoExplicado"), 2) == round(variacao, 2)

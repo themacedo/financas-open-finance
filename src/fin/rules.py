@@ -37,6 +37,8 @@ RE_BANK_BILL = re.compile(
     r"|\bpag(to|amento)?\s+(de\s+)?cart[aã]o\b|\bnu pagamentos\b", re.I)
 # Card statement line that carries the unpaid balance of the previous bill (partial payment / revolving):
 # it is not a new expense (the purchases were already counted).
+RE_LOAN_IN = re.compile(r"(dep[oó]sito|cr[eé]dito|libera[cç][aã]o) de empr[eé]stimo", re.I)
+RE_CARRYOVER_CREDIT = re.compile(r"cr[eé]dito (de |do )?rotativo", re.I)
 RE_CARRYOVER = re.compile(r"saldo (restante|anterior|em atraso|em rotativo)|fatura anterior|restante da fatura|saldo devedor anterior", re.I)
 # Transfer-looking description (used when Open Finance payment data is missing).
 RE_TRANSFER_DESC = re.compile(r"^(PIX|TED|DOC|TEV|TRANSF\w*)\b|\bPIX\b")
@@ -118,7 +120,8 @@ def _single_row(row: Any, acc_type: str, cfg: Config, tax: Taxonomy, income_by_c
         if amt > 0 and (op == "ESTORNO" or RE_REFUND.search(desc)):
             # category inherited from the original purchase in categorize.py
             return Decision("Despesa", None, rule="refund", cat_source=None)
-        if amt < 0 and RE_CARRYOVER.search(desc):
+        if (amt < 0 and RE_CARRYOVER.search(desc)) or (amt > 0 and RE_CARRYOVER_CREDIT.search(desc)):
+            # "Saldo em rotativo" (-) and "Crédito de rotativo" (+) come in pairs: the bank closing one bill into the next
             return Decision("Transferência", "Transferência", "variavel", rule="card_carryover")
         if op == "OPERACOES_CREDITO_CONTRATADAS_CARTAO" and not RE_FEE.search(desc):
             # Pix/boleto paid with the card ("Pix no crédito"): a purchase, not a fee; often to a person
@@ -134,6 +137,9 @@ def _single_row(row: Any, acc_type: str, cfg: Config, tax: Taxonomy, income_by_c
     if RE_CARD_LIMIT_TO_ACCOUNT.search(desc):
         # "Pix no crédito": the card limit lands in your account first (your own money moving, the debt is on the card)
         return Decision("Transferência", "Transferência", "variavel", rule="card_limit_to_account")
+    if amt > 0 and op == "OPERACAO_CREDITO" and RE_LOAN_IN.search(desc):
+        # the loan money arriving: a debt, not income
+        return Decision("Transferência", "Transferência", "variavel", rule="loan_received")
     if amt < 0 and op == "OPERACAO_CREDITO" and RE_DEBT_PAYMENT.search(desc):
         # paying back a loan/renegotiated card debt: the purchases were already counted on the card
         return Decision("Transferência", "Transferência", "variavel", rule="debt_payment")
