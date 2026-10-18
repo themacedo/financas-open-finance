@@ -370,6 +370,20 @@ def compute_detalhe(ledger: Ledger, cfg: "Config", plano: dict[str, Any], today:
 MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
 
+def compute_cobertura(ledger: Ledger, ini: date, ate: date) -> dict[str, float]:
+    """How a month that spent more than it earned was paid for: card balance carried to the next bill (rotativo),
+    Pix on credit to yourself (cash taken from the card limit), savings withdrawn, and what the rotativo cost."""
+    rows = ledger.active_txs("date >= ? AND date <= ?", (ini.isoformat(), ate.isoformat()))
+    rot = sum(-r["amount_cents"] for r in rows if r["rule"] == "card_carryover" and r["amount_cents"] < 0)
+    pix = sum(-r["amount_cents"] for r in rows
+              if r["rule"] == "card_credit_op" and r["natureza"] == "Transferência" and r["amount_cents"] < 0)
+    # net: the bank's automatic investment sweeps money in and out every day; only what left savings counts
+    resg = max(0, sum(r["amount_cents"] for r in rows if r["natureza"] == "Investimento"))
+    juros = sum(-r["amount_cents"] for r in rows if "ROTATIVO" in (r["desc_norm"] or "").upper() + (r["description"] or "").upper()
+                and r["natureza"] == "Despesa")
+    return {"rotativo": _reais(rot), "pixCredito": _reais(pix), "resgates": _reais(resg), "jurosRotativo": _reais(juros)}
+
+
 def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: date, ant_ini: date, ant_fim: date,
                     today: date, termos: list[str] | None = None) -> dict[str, Any]:
     """Spending by category, income by source, CLT and PJ for [ini, fim) against [ant_ini, ant_fim).
@@ -391,8 +405,12 @@ def compute_periodo(ledger: Ledger, pessoas: dict[str, str], ini: date, fim: dat
         "inicio": ini.isoformat(), "fim": (fim - timedelta(days=1)).isoformat(), "ate": ate.isoformat(),
         "anteriorInicio": ant_ini.isoformat(), "anteriorAte": ant_ate.isoformat(), "emCurso": ate < fim - timedelta(days=1),
         "entradas": {"clt": clt["recebido"], "pj": _reais(pj["receitas"]),
-                     "outros": _reais(max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"]))),
+                     # other income only: without the withdrawal (same money), the salary and the PJ billing that a
+                     # client paid straight into a PF account (already counted as PJ revenue)
+                     "outros": _reais(max(0, atual["receitas"] - atual["fontes"].get("Retirada PJ", 0) - _cents(clt["recebido"])
+                                          - sum(v for f, v in atual["fontes"].items() if f in pj["fontes"]))),
                      "custosPj": _reais(sum(pj["categorias"].values()))},
+        "cobertura": compute_cobertura(ledger, ini, ate),
         "resumo": {"receitas": _reais(atual["receitas"]), "despesas": _reais(atual["despesas"]),
                    "despesasAnterior": _reais(antes["despesas"])},
         "categorias": [{"nome": c, "atual": _reais(atual["categorias"].get(c, 0)), "anterior": _reais(antes["categorias"].get(c, 0)),

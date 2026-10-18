@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from fin.ledger import Ledger
-from fin.painel import ligar_compromissos, compute_financas, export_painel, _mes, build_painel, compute_clt, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
+from fin.painel import compute_cobertura, ligar_compromissos, compute_financas, export_painel, _mes, build_painel, compute_clt, compute_detalhe, fora_pct, nome_fixo, rotulo_gasto, load_empresas, load_historico, status_of
 
 TODAY = date(2026, 10, 17)
 
@@ -177,3 +177,21 @@ def test_names_the_detector_misses_are_blocked_by_the_ledger_list():
     assert rotulo_gasto(row("ZEBEDEU"), termos=termos) == "Pessoa física (nome oculto)"
     assert rotulo_gasto(row("Pagamento de Pix QR Code FULANO MELO", kind="company"), termos=termos) != "Fulano Melo"
     assert rotulo_gasto(row("Compra no débito|TOCA DO TATU"), termos=termos) == "Toca do Tatu"
+
+
+def test_cover_of_a_negative_month():
+    rows = [
+        {"rule": "card_carryover", "amount_cents": -286908, "natureza": "Transferência", "desc_norm": "SALDO EM ROTATIVO", "description": ""},
+        {"rule": "card_credit", "amount_cents": 286908, "natureza": "Transferência", "desc_norm": "CREDITO DE ROTATIVO", "description": ""},
+        {"rule": "card_credit_op", "amount_cents": -104379, "natureza": "Transferência", "desc_norm": "TITULAR", "description": ""},
+        {"rule": "card_credit_op", "amount_cents": -14929, "natureza": "Despesa", "desc_norm": "LOJA", "description": ""},  # Pix on credit to someone: a purchase
+        {"rule": "investment", "amount_cents": 300000, "natureza": "Investimento", "desc_norm": "RESGATE APLIC AUT", "description": ""},
+        {"rule": "investment", "amount_cents": -160000, "natureza": "Investimento", "desc_norm": "APLIC AUT", "description": ""},
+        {"rule": None, "amount_cents": -53395, "natureza": "Despesa", "desc_norm": "JUROS DE ROTATIVO", "description": ""},
+        {"rule": "refund", "amount_cents": 8160, "natureza": "Despesa", "desc_norm": "ESTORNO DE JUROS DE ROTATIVO", "description": ""},
+    ]
+    class L:
+        def active_txs(self, where, params):
+            return rows
+    c = compute_cobertura(L(), date(2026, 9, 1), date(2026, 9, 30))
+    assert c == {"rotativo": 2869.08, "pixCredito": 1043.79, "resgates": 1400.0, "jurosRotativo": 452.35}
