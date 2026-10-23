@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Modelo. scripts/instalar-launchd.sh troca __PROJECT__, __UV__, __HOME__ e grava em ~/Library/LaunchAgents. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.fin.revisoes</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string><string>__PROJECT__/scripts/aplicar-revisoes.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>__PROJECT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+    <key>FIN_CONFIG</key><string>__PROJECT__/config.yaml</string>
+    <key>FIN_UV</key><string>__UV__</string>
+  </dict>
+  <!-- a cada 10 minutos: o que foi revisado no site, no celular ou no app chega ao ledger em até 10 min (cofre aberto) -->
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>600</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/fin/revisoes.out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/fin/revisoes.err.log</string>
+</dict>
+</plist>
