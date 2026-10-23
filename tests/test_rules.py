@@ -81,6 +81,7 @@ def test_refund_reduces_expense_and_inherits_category(ledger, cfg, tax):
 def test_fee_investment_salary(ledger, cfg, tax):
     data = {I: [tx("tar", I, "2026-10-10", -19.9, "TARIFA PACOTE", op="PACOTE_TARIFA_SERVICOS"),
                 tx("rend", I, "2026-10-14", 3.12, "REND PAGO APLIC AUT", op="RENDIMENTO_APLIC_FINANCEIRA"),
+                tx("apl", I, "2026-10-21", -2014.89, "Saída APL APLIC AUT MAIS AP", op="OUTROS"),
                 tx("sal", I, "2026-10-05", 8500.0, "SALARIO", op="FOLHA_PAGAMENTO", method="TED",
                    payer=party("EMPRESA", "11.111.111/0001-11", "001"), receiver=OWN_ITAU)],
             C: [tx("iof", C, "2026-10-11", 1.92, "IOF COMPRA INTERNACIONAL", card=True, ccm={"billForecastDate": "2026-11"})]}
@@ -88,6 +89,7 @@ def test_fee_investment_salary(ledger, cfg, tax):
     assert _row(ledger, "tar")["categoria"] == "Impostos/Taxas"
     assert _row(ledger, "iof")["categoria"] == "Impostos/Taxas"
     assert _row(ledger, "rend")["natureza"] == "Investimento"
+    assert _row(ledger, "apl")["natureza"] == "Investimento"
     sal = _row(ledger, "sal")
     assert (sal["natureza"], sal["categoria"], sal["fonte"]) == ("Receita", "Salário CLT", "Empresa CLT")
 

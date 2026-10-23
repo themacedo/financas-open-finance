@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone, UTC
 from typing import Any
@@ -197,6 +197,29 @@ def local_day(raw: Any) -> str:
     if ts.tzinfo is None:
         return text[:10]
     return ts.astimezone(BRT).date().isoformat()
+
+
+def drop_reissued_card_payments(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The Nubank card (since 16/10/2026) returns each bill payment twice: the original, with the exact time, and a
+    copy attached to another bill with the date only (03:00Z = midnight in Brasília) and a new id. Both keep coming,
+    so identity resolution never pairs them. The original stays; one date-only copy per original is dropped."""
+    def is_payment(t: dict[str, Any]) -> bool:
+        return t.get("operationType") == "PAGAMENTO_FATURA"
+
+    def date_only(t: dict[str, Any]) -> bool:
+        return str(t.get("date"))[11:23] in ("", "00:00:00.000", "03:00:00.000")
+
+    originals = Counter((local_day(t["date"]), str(t.get("amount"))) for t in raw if is_payment(t) and not date_only(t))
+    kept: list[dict[str, Any]] = []
+    dropped = 0
+    for t in raw:
+        key = (local_day(t["date"]), str(t.get("amount")))
+        if is_payment(t) and date_only(t) and originals[key] > 0:
+            originals[key] -= 1
+            dropped += 1
+            continue
+        kept.append(t)
+    return kept, dropped
 
 
 def assign_natural_keys(rows: list[dict[str, Any]]) -> None:
@@ -411,11 +434,14 @@ def _sync_body(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, to
 
     # 1) items + accounts first: own documents must be known before parsing transactions
     accounts: list[Any] = []
+    conexoes: dict[str, Any] = {}  # how fresh each bank is in Pluggy, for the dashboard's data-health strip
     for it in cfg.items:
         bank, item_id = it["bank"], it["item_id"]
         label = BANK_NAMES.get(bank, bank)
         try:
             item = client.get_item(item_id)
+            conexoes[bank] = {"status": item.get("status"), "ultima": item.get("lastUpdatedAt"), "proxima": item.get("nextAutoSyncAt"),
+                              "consentimento": item.get("consentExpiresAt")}  # Meu Pluggy: the authorization lasts 1 year
             result.alerts += check_item(item, label, now, cfg.stale_hours)
             for acc in client.list_accounts(item_id):
                 ledger.upsert_account(parse_account(acc, bank, ledger.salt, it.get("owner", "pf")))
@@ -428,6 +454,8 @@ def _sync_body(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, to
             result.status = "partial"
             result.alerts.append(f"{label}: sem conexão com a Pluggy ({type(exc).__name__})")
             log.warning("item %s: rede (%s)", bank, type(exc).__name__)
+    if conexoes:
+        ledger.set_meta("pluggy_conexoes", json.dumps(conexoes, sort_keys=True, ensure_ascii=False))
     own_docs, own_tkeys = ledger.own_doc_hashes(), ledger.own_transfer_keys()
 
     # 2) transactions (two passes) + bills
@@ -447,6 +475,9 @@ def _sync_body(ledger: Ledger, client: PluggyAPI, cfg: Config, tax: Taxonomy, to
             result.status = "partial"
             result.alerts.append(f"{label}: sem conexão ao ler transações ({type(exc).__name__})")
             continue
+        if acc["type"] == "CREDIT":
+            raw, dup = drop_reissued_card_payments(raw)
+            result.stats["pagamentos_duplicados"] += dup
         rows = [parse_transaction(t, acc, ledger.salt, own_docs, own_tkeys, cfg) for t in raw]
         st = upsert_account_transactions(ledger, acc, rows, window_start=window_start if complete_window else None,
                                          today=today.isoformat(), missing_limit=cfg.missing_syncs_to_remove)

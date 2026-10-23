@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Instala os 2 LaunchAgents (sync diário 18:30 com recuperação ao ligar e de hora em hora, e bot; LABELS=local.fin.sync para só o sync). Você roda; nada é feito com sudo.
+# Instala os 3 LaunchAgents (sync diário 19:00 com recuperação ao ligar e de hora em hora, bot e revisões da tela Revisar a cada 10 min; LABELS=local.fin.sync para só o sync). Você roda; nada é feito com sudo.
 set -euo pipefail
 PROJECT="${0:A:h:h}"
 UV="${UV:-$HOME/.local/bin/uv}"
@@ -27,7 +27,7 @@ for f in "$HOME"/Library/Logs/fin/*.out.log(N) "$HOME"/Library/Logs/fin/*.err.lo
 done
 "$UV" sync --project "$PROJECT" --frozen >/dev/null
 
-for label in ${=LABELS:-local.fin.sync local.fin.bot}; do
+for label in ${=LABELS:-local.fin.sync local.fin.bot local.fin.revisoes}; do
   dst="$AGENTS/$label.plist"
   sed -e "s#__PROJECT__#$PROJECT#g" -e "s#__UV__#$UV#g" -e "s#__HOME__#$HOME#g" \
       "$PROJECT/launchd/$label.plist.template" > "$dst"

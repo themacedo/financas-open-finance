@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import logging.handlers
 import os
@@ -245,6 +246,9 @@ def _sync(args, cfg, tax, ledger) -> int:
 
         if (out := export_painel(ledger, cfg.data_dir, date.today(), datetime.now().astimezone(), cfg)):
             log.info("painel: %s", out.name)
+        from fin.pendentes import export_pendentes
+
+        export_pendentes(ledger, tax, cfg.data_dir, datetime.now().astimezone())
     except Exception as exc:  # noqa: BLE001 - the dashboard failing must not lose the sync
         alerts.append(f"Painel: falha ao gerar ({type(exc).__name__}: {exc})")
     pend = ledger.one("SELECT COUNT(*) n FROM transactions WHERE review_status='pendente' AND removed_upstream=0")["n"]
@@ -333,10 +337,27 @@ def cmd_painel(args) -> int:
     cfg, _tax, ledger = _open()
     try:
         out = export_painel(ledger, cfg.data_dir, date.today(), datetime.now().astimezone(), cfg)
+        from fin.pendentes import export_pendentes
+
+        export_pendentes(ledger, _tax, cfg.data_dir, datetime.now().astimezone())
     finally:
         ledger.close()
     print(f"painel: {out}" if out else f"painel: sem {cfg.data_dir / 'plano.yaml'}, nada gerado")
     return 0
+
+
+def cmd_revisoes(args) -> int:
+    """Applies a batch pulled from the cloud queue (the JSON of `gcloud pubsub subscriptions pull`) and prints the
+    result as JSON (ackIds included) for scripts/aplicar-revisoes.sh; with something applied, regenerates the panel."""
+    from fin.revisoes import aplicar, ler_lote
+
+    cfg, tax, ledger = _open()
+    try:
+        res = aplicar(ledger, tax, ler_lote(json.loads(Path(args.arquivo).read_text(encoding="utf-8") or "[]")))
+    finally:
+        ledger.close()
+    print(json.dumps(res, ensure_ascii=False))
+    return cmd_painel(args) if res["aplicadas"] else 0
 
 
 def cmd_bot(args) -> int:
@@ -529,6 +550,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("caju", help="importa o CSV/YAML do Caju")
     s.add_argument("--file")
     s.set_defaults(fn=cmd_caju)
+
+    s = sub.add_parser("revisoes", help="aplica as revisões da tela Revisar (lote puxado da fila da nuvem)")
+    s.add_argument("arquivo")
+    s.set_defaults(fn=cmd_revisoes)
 
     s = sub.add_parser("painel", help="gera painel.json (só agregados) a partir do plano.yaml")
     s.set_defaults(fn=cmd_painel)

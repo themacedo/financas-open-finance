@@ -91,10 +91,40 @@ def test_latest_grade_comes_from_weekly_notes(tmp_path):
     ledger.close()
 
 
+def test_session_hours_come_sorted_by_week_and_missing_file_is_empty(tmp_path):
+    horas = tmp_path / "h.json"
+    horas.write_text(json.dumps({"2026-10-10": {"total": 32.56, "clt": 10.2, "pj": 15.25, "pessoal": 15.27, "pjMadrugada": 4.3},
+                                 "2026-10-03": {"total": 50.37, "clt": 29.82}}), encoding="utf-8")
+    ledger = Ledger(tmp_path / "ledger.db")
+    d = build_painel(ledger, {**PLANO, "semanas_csv": str(tmp_path / "x.csv"), "notas_json": str(tmp_path / "x.json"),
+                              "horas_json": str(horas)}, TODAY, datetime(2026, 10, 17, tzinfo=UTC))["desempenho"]
+    assert [h["inicio"] for h in d["horas"]] == ["2026-10-03", "2026-10-10"]
+    assert d["horas"][1] == {"inicio": "2026-10-10", "total": 32.56, "clt": 10.2, "pj": 15.25, "pessoal": 15.27, "pjMadrugada": 4.3}
+    d = build_painel(ledger, {**PLANO, "horas_json": str(tmp_path / "nao-existe.json")}, TODAY, datetime(2026, 10, 17, tzinfo=UTC))
+    assert d["desempenho"]["horas"] == []
+    ledger.close()
+
+
+def test_monthly_review_comes_sorted_and_missing_file_is_empty(tmp_path):
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps({"2026-10-16": {"fim": "2026-11-15", "geral": 7.0, "areas": {"Foco": 7}, "destaque": "b", "acoes": ["x"]},
+                             "2026-09-16": {"fim": "2026-10-15", "geral": 6.5, "areas": {"Foco": 6}, "destaque": "a", "acoes": []}}),
+                 encoding="utf-8")
+    ledger = Ledger(tmp_path / "ledger.db")
+    base = {**PLANO, "semanas_csv": str(tmp_path / "x.csv"), "notas_json": str(tmp_path / "x.json"), "horas_json": str(tmp_path / "x.json")}
+    d = build_painel(ledger, {**base, "notas_mensais_json": str(m)}, TODAY, datetime(2026, 10, 17, tzinfo=UTC))["desempenho"]
+    assert [x["inicio"] for x in d["notasMensais"]] == ["2026-09-16", "2026-10-16"]
+    assert d["notasMensais"][1] == {"inicio": "2026-10-16", "fim": "2026-11-15", "geral": 7.0, "areas": {"Foco": 7}, "destaque": "b", "acoes": ["x"]}
+    d = build_painel(ledger, {**base, "notas_mensais_json": str(tmp_path / "nada.json")}, TODAY, datetime(2026, 10, 17, tzinfo=UTC))
+    assert d["desempenho"]["notasMensais"] == []
+    ledger.close()
+
+
 def test_export_writes_private_file_only_with_plan(tmp_path):
     ledger = Ledger(tmp_path / "ledger.db")
     assert export_painel(ledger, tmp_path, TODAY, datetime(2026, 10, 17, tzinfo=UTC)) is None
-    plano = {**PLANO, "semanas_csv": str(tmp_path / "nao-existe.csv"), "notas_json": str(tmp_path / "nao-existe.json")}
+    plano = {**PLANO, "semanas_csv": str(tmp_path / "nao-existe.csv"), "notas_json": str(tmp_path / "nao-existe.json"),
+             "horas_json": str(tmp_path / "nao-existe-horas.json"), "notas_mensais_json": str(tmp_path / "nao-existe-mensal.json")}
     (tmp_path / "plano.yaml").write_text(yaml.safe_dump(plano, allow_unicode=True) +
                                          "marcos:\n  - {data: 2026-09-15, rotulo: virada}\n", encoding="utf-8")
     out = export_painel(ledger, tmp_path, TODAY, datetime(2026, 10, 17, tzinfo=UTC))
@@ -165,8 +195,22 @@ def test_clt_month_splits_received_and_scheduled(tmp_path):
 def test_commitment_takes_paid_status_from_its_fixed_cost():
     f = ligar_compromissos({"compromissos": [{"descricao": "A", "fixo": "Advogado"}, {"descricao": "B", "fixo": "Outro"},
                                              {"descricao": "C"}],
-                            "detalhe": {"fixos": [{"nome": "Advogado", "pago": True}]}})
+                            "detalhe": {"fixos": [{"nome": "Advogado", "pago": True}]}}, date(2026, 10, 22))
     assert [c.get("pagoNoMes") for c in f["compromissos"]] == [True, None, None]
+
+
+def test_commitment_paid_in_cash_counts_from_the_plan_item_marked_done():
+    # passagem paga em espécie: não há lançamento no banco, mas o item do plano deste mês está feito
+    f = ligar_compromissos({"compromissos": [{"descricao": "Passagem", "fixo": "Passagem"}, {"descricao": "Vivo"}],
+                            "plano": [{"data": "2026-10-21", "descricao": "Passagem", "status": "feito"},
+                                      {"data": "2026-09-28", "descricao": "Vivo", "status": "feito"}],
+                            "detalhe": {"fixos": [{"nome": "Passagem", "pago": False}],
+                                        "periodos": {"mes": [{"chave": "m-2026-10", "fixos": [{"nome": "Passagem", "pago": False}]},
+                                                             {"chave": "m-2026-09", "fixos": [{"nome": "Passagem", "pago": False}]}]}}},
+                           date(2026, 10, 22))
+    assert [c.get("pagoNoMes") for c in f["compromissos"]] == [True, None]  # o Vivo feito é de setembro
+    assert f["detalhe"]["fixos"][0]["pago"] is True
+    assert [m["fixos"][0]["pago"] for m in f["detalhe"]["periodos"]["mes"]] == [True, False]  # outubro sim; setembro não tem item feito
 
 
 def test_names_the_detector_misses_are_blocked_by_the_ledger_list():
@@ -195,3 +239,25 @@ def test_cover_of_a_negative_month():
             return rows
     c = compute_cobertura(L(), date(2026, 9, 1), date(2026, 9, 30))
     assert c == {"rotativo": 2869.08, "pixCredito": 1043.79, "resgates": 1400.0, "jurosRotativo": 452.35}
+
+
+def test_open_bill_is_the_last_closed_bill_minus_payments_after_its_closing(ledger, cfg, tax):
+    from conftest import C, client, NOW, tx
+    from fin.painel import fatura_aberta
+    from fin.sync import run_sync
+
+    def pagamento(tid, dia, valor):
+        return tx(tid, C, dia, -valor, "Pagamento recebido", op="PAGAMENTO_FATURA", card=True, ccm={"billId": "out"})
+    data = {C: [pagamento("antes", "2026-10-10", 800.0),  # antes do fechamento: já está dentro do total da fatura
+                pagamento("depois", "2026-10-21", 3900.0),
+                tx("compra", C, "2026-10-21", 121.3, "LOJA", op="PAGAMENTO", card=True, ccm={"billForecastDate": "2026-11"})]}
+    bills = {C: [{"id": "set", "dueDate": "2026-09-24", "billClosingDate": "2026-09-17", "totalAmount": 7147.40},
+                 {"id": "out", "dueDate": "2026-10-26", "billClosingDate": "2026-10-17", "totalAmount": 7286.81,
+                  "financeCharges": [{"amount": 2869.08, "additionalInfo": "Saldo em rotativo"}, {"amount": 342.58, "additionalInfo": "Juros de rotativo"}, {"amount": 18.07, "additionalInfo": "IOF de rotativo"}, {"amount": 81.6, "additionalInfo": "Encerramento de dívida"}]}]}
+    run_sync(ledger, client(data, bills), cfg, tax, today=date(2026, 10, 23), now=NOW)
+    # o que veio de antes (rotativo + juros, IOF e encerramento) e o resto, as compras do ciclo
+    assert fatura_aberta(ledger, date(2026, 10, 23)) == {"fechamento": "2026-10-17", "vencimento": "2026-10-26", "total": 7286.81,
+                                                         "rotativo": 2869.08, "encargos": 442.25, "compras": 3975.48,
+                                                         "pago": 3900.0, "aberto": 3386.81}
+    # antes do fechamento de outubro, a aberta é a de setembro
+    assert fatura_aberta(ledger, date(2026, 10, 16))["fechamento"] == "2026-09-17"

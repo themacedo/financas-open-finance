@@ -50,7 +50,8 @@ RE_CARD_LIMIT_TO_ACCOUNT = re.compile(
     re.I)
 RE_REFUND = re.compile(r"estorno|reembolso|cancelamento|devolu", re.I)
 RE_FEE = re.compile(r"\biof\b|juros|anuidade|multa|encargo|tarifa", re.I)
-RE_INVEST = re.compile(r"aplica[cç][aã]o|resgate|rendimento|\bcdb\b|tesouro|poupan[cç]a|caixinha", re.I)
+# "\baplic\b": o Itaú passou a escrever a aplicação automática como "SAIDA APL APLIC AUT MAIS" (21/10/2026)
+RE_INVEST = re.compile(r"aplica[cç][aã]o|\baplic\b|resgate|rendimento|\bcdb\b|tesouro|poupan[cç]a|caixinha", re.I)
 
 RULE_SOURCES = ("rule", "counterpart")
 DECIDED_SOURCES = ("dictionary", "cache", "llm")

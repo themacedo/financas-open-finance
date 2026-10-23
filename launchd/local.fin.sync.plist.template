@@ -20,9 +20,9 @@
     <key>FIN_UV</key><string>__UV__</string>
   </dict>
   <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
-  <!-- 18:30: depois da atualização diária do Pluggy (~17:20-18:05). Recuperação: Mac desligado ou cofre fechado;
-       o script só roda o sync se não houve sucesso desde as 18:30 mais recentes. -->
+  <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+  <!-- 19:00: depois da atualização diária do Pluggy (cada conexão no seu horário; a mais tarde, ~18:40). Recuperação: Mac desligado ou cofre fechado;
+       o script só roda o sync se não houve sucesso desde as 19:00 mais recentes. -->
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>3600</integer>
   <key>ProcessType</key><string>Background</string>

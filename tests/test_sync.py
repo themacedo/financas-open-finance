@@ -109,3 +109,21 @@ def test_json_fixtures_end_to_end(ledger, tmp_path, tax):
     raw = " ".join(r["raw_json"] for r in ledger.active_txs())
     assert "111.111.111-11" not in raw and '"name"' not in raw
     assert "444.444.444-44" not in raw
+
+
+def test_card_payment_reissued_with_date_only_is_dropped(ledger, cfg, tax):
+    # Nubank devolve o pagamento original (hora exata) e uma cópia só com a data (03:00Z) em outra fatura
+    def pagamento(tid, quando, valor, bill):
+        t = tx(tid, C, "2026-10-07", -valor, "Pagamento recebido", op="PAGAMENTO_FATURA", card=True, ccm={"billId": bill})
+        t["date"] = quando
+        return t
+    data = {C: [pagamento("p1", "2026-10-07T16:55:59.024Z", 200.0, "A"), pagamento("p1x", "2026-10-07T03:00:00.000Z", 200.0, "B"),
+                pagamento("p2", "2026-10-07T16:55:03.272Z", 531.0, "A"), pagamento("p2x", "2026-10-07T03:00:00.000Z", 531.0, "B"),
+                # duas pagamentos reais iguais no mesmo dia, ambos com hora: os dois ficam
+                pagamento("p3", "2026-09-04T21:22:44.971Z", 150.0, "B"), pagamento("p4", "2026-09-04T17:30:09.585Z", 150.0, "B"),
+                # só a cópia com data, sem original com hora: fica
+                pagamento("p5", "2026-10-02T03:00:00.000Z", 90.0, "B")]}
+    r = run_sync(ledger, client(data), cfg, tax, today=TODAY, now=NOW)
+    assert r.stats["pagamentos_duplicados"] == 2
+    ids = {row["pluggy_id"] for row in ledger.q("SELECT pluggy_id FROM transactions")}
+    assert ids == {"p1", "p2", "p3", "p4", "p5"}
